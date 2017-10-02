@@ -7,6 +7,7 @@
 TM1637Display display(CLK, DIO);
 
 boolean started=false;
+boolean accelerated=false;
 boolean flag=false;
 int i_int=0;
 int tiks=0;
@@ -18,6 +19,7 @@ const int pin_B  = 0;
 const int pin_E1 = 1;
 const int pin_E2 = 4;
 const int pin_pwm=7;
+const int pin_rele=5;
 int P_tiks=0;
 int intervals=0;
 
@@ -49,6 +51,7 @@ void setup() {
     pinMode(pin_E2, INPUT_PULLUP);
     pinMode(pin_B, INPUT_PULLUP);
     pinMode(pin_pwm,OUTPUT);
+    pinMode(pin_rele,OUTPUT);
     E1_PV=digitalRead(pin_E1);
     E2_PV=digitalRead(pin_E2);
 
@@ -124,12 +127,25 @@ ISR(TIMER2_OVF_vect) {
 void loop() {
   if (not(digitalRead(pin_B))){
     started=true;
-    OCR2A=0xbf;
+    accelerated=false;
+    //OCR2A=0xbf;
+    digitalWrite(pin_rele,1);
   }
   if (not(started)){
     display.showNumberDec(t_freq, false, 4, 0);
   }else{
     display.showNumberDec(P_tiks, false, 4, 0);
+    if (P_tiks>t_freq){
+      accelerated=true;
+    }else{
+      if (OCR2A<0xF0){
+        OCR2A++;
+      }
+    }
+    if (accelerated){
+      digitalWrite(pin_rele,0);
+      OCR2A=0x7f;
+    }
   }
   delay(100);
 }
