@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <TM1637Display.h>
+#include <EEPROM.h>
 
 #define CLK 13
 #define DIO 12
@@ -22,8 +23,22 @@ const int pin_pwm=7;
 const int pin_rele=5;
 int P_tiks=0;
 int intervals=0;
+int OCR2A_v=127;
 
-void check_enc(){
+float EEPROM_float_read(int addr) {    
+  byte raw[4];
+  for(byte i = 0; i < 4; i++) raw[i] = EEPROM.read(addr+i);
+  float &num = (float&)raw;
+  return num;
+}
+
+void EEPROM_float_write(int addr, float num) {
+  byte raw[4];
+  (float&)raw = num;
+  for(byte i = 0; i < 4; i++) EEPROM.write(addr+i, raw[i]);
+}
+
+int check_enc(){
   int e1,e2;
   e1=digitalRead(pin_E1);
   e2=digitalRead(pin_E2);
@@ -31,16 +46,24 @@ void check_enc(){
     E1_PV=e1;
     if (!e1){
       if (e2){
-        t_freq+=df;
+        return 1;
       }else{
-        t_freq-=df;
-      }
-      if (t_freq<0){
-        t_freq=0;
+        return -1;
       }
     }
   }
+  return 0;
 }
+
+boolean check_conf_timeout(int but, int timeout){
+  for(int i=0; i<timeout; i++){
+      if (digitalRead(but)){
+        return false;
+      }
+      delay(100);
+    }
+    return true;
+  }
 
 void setup() {
   // put your setup code here, to run once:
@@ -84,6 +107,19 @@ void setup() {
     EIMSK=(1<<INT1) | (1<<INT0);
     EIFR=(1<<INTF1) | (1<<INTF0);
     PCICR=(0<<PCIE2) | (0<<PCIE1) | (0<<PCIE0);
+
+    if(check_conf_timeout(pin_B,20)){
+        display.showNumberDec(OCR2A_v, false, 4, 0);
+        while(not(check_conf_timeout(pin_B,20))){
+          display.showNumberDec(OCR2A_v, false, 4, 0);
+          OCR2A_v+=check_enc();
+        }
+        EEPROM_float_write(0, OCR2A_v);
+        
+    }
+
+    OCR2A_v=EEPROM_float_read(0);
+    OCR2A=OCR2A_v;
 }
 
 ISR (INT0_vect){
@@ -108,7 +144,7 @@ ISR(TIMER2_OVF_vect) {
       tiks=0;
     }
     intervals++;
-    if (intervals==25){
+    if (intervals==50){
       intervals=0;
     }
     digitalWrite(pin_pwm,1);
@@ -118,7 +154,10 @@ ISR(TIMER2_OVF_vect) {
     i_int=0;
   }
   if (not(started)){
-    check_enc();
+    t_freq+=check_enc()*df;
+    if (t_freq<0){
+      t_freq=0;
+    }
   }else{
     
   }
@@ -128,14 +167,14 @@ void loop() {
   if (not(digitalRead(pin_B))){
     started=true;
     accelerated=false;
-    //OCR2A=0xbf;
+    OCR2A=OCR2A_v;
     digitalWrite(pin_rele,1);
   }
   if (not(started)){
     display.showNumberDec(t_freq, false, 4, 0);
   }else{
-    display.showNumberDec(P_tiks, false, 4, 0);
-    if (P_tiks>t_freq){
+    display.showNumberDec(P_tiks*19.5, false, 4, 0);
+    if (P_tiks*19.5>t_freq){
       accelerated=true;
     }else{
       if (OCR2A<0xF0){
@@ -144,7 +183,7 @@ void loop() {
     }
     if (accelerated){
       digitalWrite(pin_rele,0);
-      OCR2A=0x7f;
+      OCR2A=OCR2A_v;
     }
   }
   delay(100);
