@@ -1,29 +1,43 @@
 #include <Arduino.h>
 #include <TM1637Display.h>
 #include <EEPROM.h>
+#include "max6675.h"
 
-#define CLK 13
-#define DIO 12
+int thermoDO = 46;
+int thermoCS = 48;
+int thermoCLK = 50;
 
-TM1637Display display(CLK, DIO);
+MAX6675 thermocouple(thermoCLK, thermoCS, thermoDO);
+#define CLK_1 53
+#define DIO_1 51
+#define CLK_2 37
+#define DIO_2 39
+#define CLK_3 23
+#define DIO_3 27
+
+TM1637Display display_1(CLK_1, DIO_1);
+TM1637Display display_2(CLK_2, DIO_2);
+TM1637Display display_3(CLK_3, DIO_3);
 
 boolean started=false;
 boolean accelerated=false;
 boolean flag=false;
 int i_int=0;
 int tiks=0;
-int t_freq=0;
+int t_freq=200;
 int E1_PV;
 int E2_PV;
 const int df=10;
-const int pin_B  = 0;
-const int pin_E1 = 1;
-const int pin_E2 = 4;
+const int pin_B  = 49;
+const int pin_E1 = 47;
+const int pin_E2 = 45;
 const int pin_pwm=7;
 const int pin_rele=5;
 int P_tiks=0;
 int intervals=0;
 int OCR2A_v=127;
+int temp=0;
+int i_t=0;
 
 float EEPROM_float_read(int addr) {    
   byte raw[4];
@@ -67,7 +81,10 @@ boolean check_conf_timeout(int but, int timeout){
 
 void setup() {
   // put your setup code here, to run once:
-    display.setBrightness(0x0f);
+  Serial.begin(9600);
+    display_1.setBrightness(0x0f);
+    display_2.setBrightness(0x0f);
+    display_3.setBrightness(0x0f);
     pinMode(3, INPUT_PULLUP);
     pinMode(2, INPUT_PULLUP);
     pinMode(pin_E1, INPUT_PULLUP);
@@ -96,22 +113,26 @@ void setup() {
     TIMSK2=(0<<OCIE2B) | (1<<OCIE2A) | (1<<TOIE2);
 
     // External Interrupt(s) initialization
-    // INT0: On
-    // INT0 Mode: Rising Edge
-    // INT1: On
-    // INT1 Mode: Rising Edge
-    // Interrupt on any change on pins PCINT0-7: Off
-    // Interrupt on any change on pins PCINT8-14: Off
-    // Interrupt on any change on pins PCINT16-23: Off
-    EICRA=(1<<ISC11) | (0<<ISC10) | (1<<ISC01) | (0<<ISC00);
-    EIMSK=(1<<INT1) | (1<<INT0);
-    EIFR=(1<<INTF1) | (1<<INTF0);
+// INT0: Off
+// INT1: Off
+// INT2: Off
+// INT3: Off
+// INT4: On
+// INT4 Mode: Rising Edge
+// INT5: On
+// INT5 Mode: Rising Edge
+// INT6: Off
+// INT7: Off
+EICRA=(0<<ISC31) | (0<<ISC30) | (0<<ISC21) | (0<<ISC20) | (0<<ISC11) | (0<<ISC10) | (0<<ISC01) | (0<<ISC00);
+EICRB=(0<<ISC71) | (0<<ISC70) | (0<<ISC61) | (0<<ISC60) | (1<<ISC51) | (1<<ISC50) | (1<<ISC41) | (1<<ISC40);
+EIMSK=(0<<INT7) | (0<<INT6) | (1<<INT5) | (1<<INT4) | (0<<INT3) | (0<<INT2) | (0<<INT1) | (0<<INT0);
+EIFR=(0<<INTF7) | (0<<INTF6) | (1<<INTF5) | (1<<INTF4) | (0<<INTF3) | (0<<INTF2) | (0<<INTF1) | (0<<INTF0);
     PCICR=(0<<PCIE2) | (0<<PCIE1) | (0<<PCIE0);
 
     if(check_conf_timeout(pin_B,20)){
-        display.showNumberDec(OCR2A_v, false, 4, 0);
+        display_1.showNumberDec(OCR2A_v, false, 4, 0);
         while(not(check_conf_timeout(pin_B,20))){
-          display.showNumberDec(OCR2A_v, false, 4, 0);
+          display_1.showNumberDec(OCR2A_v, false, 4, 0);
           OCR2A_v+=check_enc();
         }
         EEPROM_float_write(0, OCR2A_v);
@@ -122,14 +143,14 @@ void setup() {
     OCR2A=OCR2A_v;
 }
 
-ISR (INT0_vect){
+ISR (INT4_vect){
   if (flag){
     tiks++;
   }
   flag=false;
 }
 
-ISR (INT1_vect){
+ISR (INT5_vect){
   flag=true;
 }
 
@@ -171,20 +192,31 @@ void loop() {
     digitalWrite(pin_rele,1);
   }
   if (not(started)){
-    display.showNumberDec(t_freq, false, 4, 0);
+    display_1.showNumberDec(t_freq, false, 4, 0);
   }else{
-    display.showNumberDec(P_tiks*19.5, false, 4, 0);
+    display_1.showNumberDec(P_tiks*19.5, false, 4, 0);
     if (P_tiks*19.5>t_freq){
       accelerated=true;
     }else{
       if (OCR2A<0xF0){
-        OCR2A++;
+        OCR2A+=30;
       }
     }
+    
     if (accelerated){
+      delay(3000);
       digitalWrite(pin_rele,0);
       OCR2A=OCR2A_v;
     }
   }
+  display_2.showNumberDec(digitalRead(18), false, 4, 0);
+  if (i_t==0){
+    temp=thermocouple.readCelsius();
+  }
+  i_t++;
+  if (i_t==5){
+    i_t=0;
+  }
+  display_3.showNumberDec(temp, false, 4, 0);
   delay(100);
 }
