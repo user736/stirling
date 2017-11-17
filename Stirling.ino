@@ -14,6 +14,7 @@ MAX6675 thermocouple(thermoCLK, thermoCS, thermoDO);
 #define DIO_2 39
 #define CLK_3 23
 #define DIO_3 27
+#define temp2start 20
 
 TM1637Display display_1(CLK_1, DIO_1);
 TM1637Display display_2(CLK_2, DIO_2);
@@ -22,8 +23,10 @@ TM1637Display display_3(CLK_3, DIO_3);
 boolean started=false;
 boolean accelerated=false;
 boolean flag=false;
+boolean ready2start=false;
 int i_int=0;
 int tiks=0;
+int tiks_h=0;
 int t_freq=200;
 int E1_PV;
 int E2_PV;
@@ -34,6 +37,7 @@ const int pin_E2 = 45;
 const int pin_pwm=7;
 const int pin_rele=5;
 int P_tiks=0;
+int P_tiks_h=0;
 int intervals=0;
 int OCR2A_v=127;
 int temp=0;
@@ -111,22 +115,22 @@ void setup() {
 
     // Timer/Counter 2 Interrupt(s) initialization
     TIMSK2=(0<<OCIE2B) | (1<<OCIE2A) | (1<<TOIE2);
-
-    // External Interrupt(s) initialization
+// External Interrupt(s) initialization
 // INT0: Off
 // INT1: Off
 // INT2: Off
-// INT3: Off
+// INT3: On
+// INT3 Mode: Falling Edge
 // INT4: On
 // INT4 Mode: Rising Edge
 // INT5: On
 // INT5 Mode: Rising Edge
 // INT6: Off
 // INT7: Off
-EICRA=(0<<ISC31) | (0<<ISC30) | (0<<ISC21) | (0<<ISC20) | (0<<ISC11) | (0<<ISC10) | (0<<ISC01) | (0<<ISC00);
+EICRA=(1<<ISC31) | (0<<ISC30) | (0<<ISC21) | (0<<ISC20) | (0<<ISC11) | (0<<ISC10) | (0<<ISC01) | (0<<ISC00);
 EICRB=(0<<ISC71) | (0<<ISC70) | (0<<ISC61) | (0<<ISC60) | (1<<ISC51) | (1<<ISC50) | (1<<ISC41) | (1<<ISC40);
-EIMSK=(0<<INT7) | (0<<INT6) | (1<<INT5) | (1<<INT4) | (0<<INT3) | (0<<INT2) | (0<<INT1) | (0<<INT0);
-EIFR=(0<<INTF7) | (0<<INTF6) | (1<<INTF5) | (1<<INTF4) | (0<<INTF3) | (0<<INTF2) | (0<<INTF1) | (0<<INTF0);
+EIMSK=(0<<INT7) | (0<<INT6) | (1<<INT5) | (1<<INT4) | (1<<INT3) | (0<<INT2) | (0<<INT1) | (0<<INT0);
+EIFR=(0<<INTF7) | (0<<INTF6) | (1<<INTF5) | (1<<INTF4) | (1<<INTF3) | (0<<INTF2) | (0<<INTF1) | (0<<INTF0);
     PCICR=(0<<PCIE2) | (0<<PCIE1) | (0<<PCIE0);
 
     if(check_conf_timeout(pin_B,20)){
@@ -141,6 +145,10 @@ EIFR=(0<<INTF7) | (0<<INTF6) | (1<<INTF5) | (1<<INTF4) | (0<<INTF3) | (0<<INTF2)
 
     OCR2A_v=EEPROM_float_read(0);
     OCR2A=OCR2A_v;
+}
+
+ISR (INT3_vect){
+  tiks_h++;
 }
 
 ISR (INT4_vect){
@@ -162,10 +170,12 @@ ISR(TIMER2_OVF_vect) {
   if (i_int==0){
     if (intervals==0){
       P_tiks=tiks;
+      P_tiks_h=tiks_h;
       tiks=0;
+      tiks_h=0;
     }
     intervals++;
-    if (intervals==50){
+    if (intervals==25){
       intervals=0;
     }
     digitalWrite(pin_pwm,1);
@@ -186,30 +196,34 @@ ISR(TIMER2_OVF_vect) {
 
 void loop() {
   if (not(digitalRead(pin_B))){
-    started=true;
+    ready2start=true;
     accelerated=false;
     OCR2A=OCR2A_v;
     digitalWrite(pin_rele,1);
   }
+  if (ready2start&&temp>temp2start){
+    started=true;
+  }
   if (not(started)){
     display_1.showNumberDec(t_freq, false, 4, 0);
   }else{
-    display_1.showNumberDec(P_tiks*19.5, false, 4, 0);
+    display_1.showNumberDec(P_tiks*39, false, 4, 0);
     if (P_tiks*19.5>t_freq){
       accelerated=true;
     }else{
-      if (OCR2A<0xF0){
-        OCR2A+=30;
+      if (OCR2A<0xF0&&not(accelerated)){
+        OCR2A+=10;
       }
     }
     
-    if (accelerated){
+    if (accelerated&&OCR2A>OCR2A_v){
       delay(3000);
       digitalWrite(pin_rele,0);
       OCR2A=OCR2A_v;
     }
   }
-  display_2.showNumberDec(digitalRead(18), false, 4, 0);
+  //display_2.showNumberDec(digitalRead(18), false, 4, 0);
+  display_2.showNumberDec(P_tiks_h*234, false, 4, 0);
   if (i_t==0){
     temp=thermocouple.readCelsius();
   }
