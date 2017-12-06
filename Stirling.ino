@@ -14,7 +14,9 @@ MAX6675 thermocouple(thermoCLK, thermoCS, thermoDO);
 #define DIO_2 39
 #define CLK_3 23
 #define DIO_3 27
-#define temp2start 20
+#define temp2start 10
+#define tiks_per_m 29296
+#define averaging 50
 
 TM1637Display display_1(CLK_1, DIO_1);
 TM1637Display display_2(CLK_2, DIO_2);
@@ -24,8 +26,12 @@ boolean started=false;
 boolean accelerated=false;
 boolean flag=false;
 boolean ready2start=false;
+boolean tiks_flag=false;
+int rpms[averaging+1];
 int i_int=0;
 int tiks=0;
+int tiks_int=0;
+int tiks_int2d=1;
 int tiks_h=0;
 int t_freq=200;
 int E1_PV;
@@ -54,6 +60,25 @@ void EEPROM_float_write(int addr, float num) {
   byte raw[4];
   (float&)raw = num;
   for(byte i = 0; i < 4; i++) EEPROM.write(addr+i, raw[i]);
+}
+
+void set_rpms(int val){
+  val=tiks_per_m/val;
+  int s=0;
+  int c=0;
+  for (int i=1; i<averaging; i++){
+    rpms[i-1]=rpms[i];
+    if(rpms[i]==0){
+      s=0;
+      c=0;
+    }else{
+      s+=rpms[i];
+      c++;
+    }
+  }
+  s+=val;
+  c++;
+  rpms[averaging]=s/c;
 }
 
 int check_enc(){
@@ -86,6 +111,9 @@ boolean check_conf_timeout(int but, int timeout){
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(9600);
+    for (int i=1; i<averaging+1; i++){
+      rpms[i]=0;
+    }
     display_1.setBrightness(0x0f);
     display_2.setBrightness(0x0f);
     display_3.setBrightness(0x0f);
@@ -149,6 +177,9 @@ EIFR=(0<<INTF7) | (0<<INTF6) | (1<<INTF5) | (1<<INTF4) | (1<<INTF3) | (0<<INTF2)
 
 ISR (INT3_vect){
   tiks_h++;
+  tiks_int2d=tiks_int;
+  tiks_int=0;
+  tiks_flag=true;
 }
 
 ISR (INT4_vect){
@@ -175,12 +206,13 @@ ISR(TIMER2_OVF_vect) {
       tiks_h=0;
     }
     intervals++;
-    if (intervals==25){
+    if (intervals==75){
       intervals=0;
     }
     digitalWrite(pin_pwm,1);
   }
   i_int++;
+  tiks_int++;
   if (i_int==5){
     i_int=0;
   }
@@ -195,6 +227,10 @@ ISR(TIMER2_OVF_vect) {
 }
 
 void loop() {
+  if(tiks_flag){
+    tiks_flag=0;
+    set_rpms(tiks_int2d);
+  }
   if (not(digitalRead(pin_B))){
     ready2start=true;
     accelerated=false;
@@ -207,7 +243,8 @@ void loop() {
   if (not(started)){
     display_1.showNumberDec(t_freq, false, 4, 0);
   }else{
-    display_1.showNumberDec(P_tiks*39, false, 4, 0);
+    display_1.showNumberDec(rpms[averaging], false, 4, 0);
+    //display_1.showNumberDec(P_tiks*13, false, 4, 0); 
     if (P_tiks*19.5>t_freq){
       accelerated=true;
     }else{
@@ -223,7 +260,7 @@ void loop() {
     }
   }
   //display_2.showNumberDec(digitalRead(18), false, 4, 0);
-  display_2.showNumberDec(P_tiks_h*234, false, 4, 0);
+  display_2.showNumberDec(P_tiks_h*78, false, 4, 0);
   if (i_t==0){
     temp=thermocouple.readCelsius();
   }
