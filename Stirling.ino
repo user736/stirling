@@ -14,7 +14,19 @@ MAX6675 thermocouple(thermoCLK, thermoCS, thermoDO);
 #define DIO_2 39
 #define CLK_3 23
 #define DIO_3 27
-#define temp2start 10
+#define rpm_load1 450
+#define rpm_load2 470
+#define rpm_load3 550
+#define rpm_load4 600
+#define rpm_unload1 400
+#define rpm_unload2 400
+#define rpm_unload3 500
+#define rpm_unload4 550
+#define load1 36
+#define load2 30
+#define load3 34
+#define load4 32
+#define temp2start 120 //200
 #define tiks_per_m 29296
 #define averaging 50
 
@@ -41,15 +53,16 @@ const int pin_B  = 49;
 const int pin_E1 = 47;
 const int pin_E2 = 45;
 const int pin_pwm=7;
-const int pin_rele=5;
+const int pin_rele=4;
 int P_tiks=0;
 int P_tiks_h=0;
 int intervals=0;
 int OCR2A_v=127;
 int temp=0;
 int i_t=0;
+int tiks2rpm_clean=0;
 
-float EEPROM_float_read(int addr) {    
+float EEPROM_float_read(int addr) {
   byte raw[4];
   for(byte i = 0; i < 4; i++) raw[i] = EEPROM.read(addr+i);
   float &num = (float&)raw;
@@ -122,6 +135,14 @@ void setup() {
     pinMode(pin_E1, INPUT_PULLUP);
     pinMode(pin_E2, INPUT_PULLUP);
     pinMode(pin_B, INPUT_PULLUP);
+    pinMode(load1, OUTPUT);
+    pinMode(load2, OUTPUT);
+    pinMode(load3, OUTPUT);
+    pinMode(load4, OUTPUT);
+    digitalWrite(load1, 1);
+    digitalWrite(load2, 1);
+    digitalWrite(load3, 1);
+    digitalWrite(load4, 1);
     pinMode(pin_pwm,OUTPUT);
     pinMode(pin_rele,OUTPUT);
     E1_PV=digitalRead(pin_E1);
@@ -180,6 +201,7 @@ ISR (INT3_vect){
   tiks_int2d=tiks_int;
   tiks_int=0;
   tiks_flag=true;
+  tiks2rpm_clean=0;
 }
 
 ISR (INT4_vect){
@@ -198,8 +220,10 @@ ISR (TIMER2_COMPA_vect) {
 }
 
 ISR(TIMER2_OVF_vect) {
+  
   if (i_int==0){
     if (intervals==0){
+      tiks2rpm_clean++;
       P_tiks=tiks;
       P_tiks_h=tiks_h;
       tiks=0;
@@ -227,6 +251,10 @@ ISR(TIMER2_OVF_vect) {
 }
 
 void loop() {
+  if(tiks2rpm_clean>9){
+    rpms[averaging]=0;
+    rpms[averaging-1]=0;
+  }
   if(tiks_flag){
     tiks_flag=0;
     set_rpms(tiks_int2d);
@@ -235,21 +263,56 @@ void loop() {
     ready2start=true;
     accelerated=false;
     OCR2A=OCR2A_v;
-    digitalWrite(pin_rele,1);
+    
   }
   if (ready2start&&temp>temp2start){
+    if(not(accelerated)){
+      digitalWrite(pin_rele,1);
+    }
     started=true;
   }
-  if (not(started)){
+  if (not(ready2start)){
     display_1.showNumberDec(t_freq, false, 4, 0);
   }else{
     display_1.showNumberDec(rpms[averaging], false, 4, 0);
-    //display_1.showNumberDec(P_tiks*13, false, 4, 0); 
-    if (P_tiks*19.5>t_freq){
+    //display_1.showNumberDec(P_tiks*13, false, 4, 0);     
+  }
+  if (started){
+    
+    if (rpms[averaging]>rpm_load1){
+      digitalWrite(load1,0);
+    }else{
+      if (rpms[averaging]<rpm_unload1){
+        digitalWrite(load1,1);
+      }
+    }
+    if (rpms[averaging]>rpm_load2){
+      digitalWrite(load2,0);
+    }else{
+      if (rpms[averaging]<rpm_unload2){
+        digitalWrite(load2,1);
+      }
+    }
+    if (rpms[averaging]>rpm_load3){
+      digitalWrite(load3,0);
+    }else{
+      if (rpms[averaging]<rpm_unload3){
+        digitalWrite(load3,1);
+      }
+    }
+    if (rpms[averaging]>rpm_load4){
+      digitalWrite(load4,0);
+    }else{
+      if (rpms[averaging]<rpm_unload4){
+        digitalWrite(load4,1);
+      }
+    }
+
+    if (rpms[averaging]>t_freq){
       accelerated=true;
     }else{
       if (OCR2A<0xF0&&not(accelerated)){
-        OCR2A+=10;
+        OCR2A+=20;
       }
     }
     
