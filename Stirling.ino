@@ -3,17 +3,21 @@
 #include <EEPROM.h>
 #include "max6675.h"
 
-int thermoDO = 46;
-int thermoCS = 48;
-int thermoCLK = 50;
-
-MAX6675 thermocouple(thermoCLK, thermoCS, thermoDO);
+#define i_temp_head 0
+#define i_temp_cool_in 1
+#define i_temp_cool_out 2
 #define CLK_1 53
 #define DIO_1 51
 #define CLK_2 37
 #define DIO_2 39
 #define CLK_3 23
 #define DIO_3 27
+#define thermoDO 46
+#define thermoCS 48
+#define thermoCLK 50
+#define clockHC 44
+#define latchHC 42
+#define dataHC 40
 #define rpm_load1 450
 #define rpm_load2 470
 #define rpm_load3 550
@@ -29,11 +33,16 @@ MAX6675 thermocouple(thermoCLK, thermoCS, thermoDO);
 #define temp2start 120 //200
 #define tiks_per_m 29296
 #define averaging 50
+#define temps_count 12
+
+MAX6675 thermocouple(thermoCLK, thermoCS, thermoDO);
 
 TM1637Display display_1(CLK_1, DIO_1);
 TM1637Display display_2(CLK_2, DIO_2);
 TM1637Display display_3(CLK_3, DIO_3);
 
+int i_temp=0;
+int temps[temps_count];
 boolean started=false;
 boolean accelerated=false;
 boolean flag=false;
@@ -61,6 +70,7 @@ int OCR2A_v=127;
 int temp=0;
 int i_t=0;
 int tiks2rpm_clean=0;
+int shift_data;
 
 float EEPROM_float_read(int addr) {
   byte raw[4];
@@ -127,9 +137,15 @@ void setup() {
     for (int i=1; i<averaging+1; i++){
       rpms[i]=0;
     }
+    for(int i = 0; i < temps_count; i++){
+      temps[i]=0;
+    }
     display_1.setBrightness(0x0f);
     display_2.setBrightness(0x0f);
     display_3.setBrightness(0x0f);
+    pinMode(latchHC, OUTPUT);
+    pinMode(clockHC, OUTPUT);
+    pinMode(dataHC, OUTPUT);
     pinMode(3, INPUT_PULLUP);
     pinMode(2, INPUT_PULLUP);
     pinMode(pin_E1, INPUT_PULLUP);
@@ -251,6 +267,17 @@ ISR(TIMER2_OVF_vect) {
 }
 
 void loop() {
+  i_temp++;
+  if (i_temp>=temps_count){
+    i_temp=0;
+  }
+  digitalWrite(latchHC, LOW);
+  shift_data = 1<<i_temp;
+  shiftOut(dataHC, clockHC, MSBFIRST, (shift_data >> 8)); 
+  shiftOut(dataHC, clockHC, MSBFIRST, shift_data);
+  digitalWrite(latchHC, HIGH);
+  delay(50);
+  
   if(tiks2rpm_clean>9){
     rpms[averaging]=0;
     rpms[averaging-1]=0;
@@ -259,23 +286,27 @@ void loop() {
     tiks_flag=0;
     set_rpms(tiks_int2d);
   }
-  if (not(digitalRead(pin_B))){
-    ready2start=true;
-    accelerated=false;
-    OCR2A=OCR2A_v;
-    
-  }
+
   if (ready2start&&temp>temp2start){
     if(not(accelerated)){
       digitalWrite(pin_rele,1);
     }
     started=true;
   }
-  if (not(ready2start)){
-    display_1.showNumberDec(t_freq, false, 4, 0);
+ if (not(digitalRead(pin_B))){
+      ready2start=true;
+      accelerated=false;
+      OCR2A=OCR2A_v;
+      display_2.showNumberDec(temps[i_temp_cool_in], false, 4, 0);
+      display_1.showNumberDec(temps[i_temp_cool_out], false, 4, 0);
   }else{
-    display_1.showNumberDec(rpms[averaging], false, 4, 0);
-    //display_1.showNumberDec(P_tiks*13, false, 4, 0);     
+      display_2.showNumberDec(P_tiks_h*78, false, 4, 0);
+      if (not(ready2start)){
+          display_1.showNumberDec(t_freq, false, 4, 0);
+      }else{
+          display_1.showNumberDec(rpms[averaging], false, 4, 0);
+          //display_1.showNumberDec(P_tiks*13, false, 4, 0);     
+      }
   }
   if (started){
     
@@ -322,15 +353,14 @@ void loop() {
       OCR2A=OCR2A_v;
     }
   }
-  //display_2.showNumberDec(digitalRead(18), false, 4, 0);
-  display_2.showNumberDec(P_tiks_h*78, false, 4, 0);
-  if (i_t==0){
-    temp=thermocouple.readCelsius();
-  }
-  i_t++;
-  if (i_t==5){
-    i_t=0;
-  }
-  display_3.showNumberDec(temp, false, 4, 0);
+  delay(300);
+   temps[i_temp]=thermocouple.readCelsius();
+  Serial.println(i_temp);
+  Serial.println(temps[i_temp]);
+  //i_t++;
+  //if (i_t==5){
+  //  i_t=0;
+  //}
+  display_3.showNumberDec(temps[i_temp_head], false, 4, 0);
   delay(100);
 }
