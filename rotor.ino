@@ -34,6 +34,8 @@
 #define pwm_load 2
 #define n_rpm 500
 #define t_rpm 400
+#define ps_in 14
+#define ps_out 15
 
 LiquidCrystal lcd(LCD_RS, LCD_E, LCD_D4, LCD_D5, LCD_D6, LCD_D7);
 MAX6675 thermocouple(thermoCLK, thermoCS, thermoDO);
@@ -57,6 +59,7 @@ boolean c_tiks_flag=false;
 boolean accelerating=false;
 boolean start_error=false;
 int tiks2start_error=0;
+int load_pwm_val=1024;
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 
 void setup() {
@@ -84,6 +87,9 @@ void setup() {
     }
     pinMode(pin_B, INPUT_PULLUP);
     pinMode(pin_pwm,OUTPUT);
+    
+    pinMode(ps_in, INPUT);
+    pinMode(ps_out, OUTPUT);
 
     // Timer/Counter 2 initialization
     // Clock source: System Clock
@@ -202,10 +208,22 @@ void loop() {
     }
 
     if (accelerated){
-      pwm.setPWM(pwm_fan, 0, fan_pwm_val);
-      pwm.setPWM(pwm_load, 0, load_pwm_val);
+        if (rpms[averaging]>n_rpm){
+              load_pwm_val+=50;
+        }else{
+          if (rpms[averaging]>n_rpm){
+              load_pwm_val-=50;
+          }
+        }
+        pwm.setPWM(pwm_fan, 0, fan_pwm_val);
+        pwm.setPWM(pwm_load, 0, load_pwm_val);
+    }else{
+        pwm.setPWM(pwm_fan, 0, 4096);
+        pwm.setPWM(pwm_load, 0, 4096);
     }
 
+    digitalWrite(ps_out, accelerated*digitalRead(ps_in));
+    
     if (started&&ready2start){
         if (not(accelerating)){
             accelerating=true;
