@@ -21,14 +21,13 @@
 #define i_temp_cool_out 2
 #define temps_count 4
 
-#define OCR2A_v 127
+#define OCR2A_v 110
 #define pin_B 49
-#define temp2start 30
+#define temp2start 20
 #define pin_pwm 29
 #define averaging 8
 #define tiks_per_m 29296
-#define rele_pwm_val 1024
-#define fan_pwm_val 1024
+#define rele_pwm_val 1536
 #define pwm_rele 0
 #define pwm_fan 1
 #define pwm_load 2
@@ -58,8 +57,11 @@ boolean tiks_flag=false;
 boolean c_tiks_flag=false;
 boolean accelerating=false;
 boolean start_error=false;
+boolean runned=false;
 int tiks2start_error=0;
-int load_pwm_val=1024;
+int load_pwm_val=512;
+int fan_pwm_val=512;
+int accel_tiks=0;
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 
 void setup() {
@@ -188,6 +190,7 @@ void loop() {
    if (not(digitalRead(pin_B))){
       started=true;
       accelerated=false;
+      runned=false;
       start_error=false;
       OCR2A=OCR2A_v;
    }
@@ -197,8 +200,9 @@ void loop() {
     }else{
       ready2start=false;
     }
-    if (tiks_int>200){
-        c_tiks_flag=0;
+    if (tiks_int>100){
+        c_tiks_flag=false;
+        tiks_flag=0;                                
         tiks_int=0;
         rpms[averaging]=0;
     }
@@ -207,24 +211,38 @@ void loop() {
         set_rpms(tiks_int2d);
     }
 
-    if (accelerated){
-        if (rpms[averaging]>n_rpm){
-              load_pwm_val+=50;
-        }else{
-          if (rpms[averaging]>n_rpm){
-              load_pwm_val-=50;
-          }
+    if (runned){
+        load_pwm_val+=20*(rpms[averaging]-n_rpm);
+        if (load_pwm_val>4094){
+            load_pwm_val=4094;
+        }
+        if (load_pwm_val<0){
+            load_pwm_val=0;
+        }
+        fan_pwm_val+=50*(temps[i_temp_cool_in]-35);
+        if (fan_pwm_val>1536){
+            fan_pwm_val=1536;
+        }
+        if (fan_pwm_val<384){
+            fan_pwm_val=384;
         }
         pwm.setPWM(pwm_fan, 0, fan_pwm_val);
         pwm.setPWM(pwm_load, 0, load_pwm_val);
     }else{
+        if (accelerated){
+            accel_tiks++;
+        }
+        if (accel_tiks>3){
+            accel_tiks=0;
+            runned=true;
+        }
         pwm.setPWM(pwm_fan, 0, 4096);
         pwm.setPWM(pwm_load, 0, 4096);
     }
 
     digitalWrite(ps_out, accelerated*digitalRead(ps_in));
     
-    if (started&&ready2start){
+    if (accelerating||started&&ready2start){
         if (not(accelerating)){
             accelerating=true;
             pwm.setPWM(pwm_rele, 0, rele_pwm_val);
@@ -234,7 +252,7 @@ void loop() {
             accelerated=true;
             accelerating=false;
             started=false;
-            delay(3000);
+            delay(2000);
             pwm.setPWM(pwm_rele, 0, 4096);
             OCR2A=OCR2A_v;
         }else{
@@ -252,6 +270,7 @@ void loop() {
                 OCR2A=OCR2A_v;
                 accelerating=false;
                 accelerated=false;
+                runned=false;
                 started=false;
                 start_error=true;
                 tiks2start_error=0;
