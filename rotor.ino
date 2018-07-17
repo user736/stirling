@@ -46,6 +46,7 @@ int shift_data;
 
 int RPM=0;
 int rpms[averaging+1];
+int amperages[averaging+1];
 int i_int=0;
 int tiks_int2d=0;
 int tiks_int=0;
@@ -71,7 +72,7 @@ void setup() {
     lcd.setCursor(2, 0);
     lcd.write("** ROTOR SUMY **");
     lcd.setCursor(0, 1);
-    lcd.write("P1-    P2-    P3-");
+    lcd.write("P1-    P2-    I-");
     lcd.setCursor(0, 2);
     lcd.write("T1-    T2-    T3-");
     lcd.setCursor(0, 3);
@@ -157,22 +158,37 @@ ISR(TIMER2_OVF_vect) {
 }
 
 void set_rpms(int val){
-    val=tiks_per_m/val;
+  set_averaging(0, val);
+
+}
+void set_amperage(int val){
+  set_averaging(1, val);
+}
+
+void set_averaging(int index, int val){  
+    int *temp_arr;
+    if (index==0){
+      val=tiks_per_m/val;
+      temp_arr=rpms;
+    }else{
+      temp_arr=amperages;
+    }
+    
     int s=0;
     int c=0;
     for (int i=1; i<averaging; i++){
-        rpms[i-1]=rpms[i];
-        if(rpms[i]==0){
+        temp_arr[i-1]=temp_arr[i];
+        if(temp_arr[i]==0){
             s=0;
             c=0;
         }else{
-            s+=rpms[i];
+            s+=temp_arr[i];
             c++;
         }
     }
     s+=val;
     c++;
-    rpms[averaging]=s/c;
+    temp_arr[averaging]=s/c;
 }
 
 void loop() {
@@ -210,6 +226,7 @@ void loop() {
         tiks_flag=0;
         set_rpms(tiks_int2d);
     }
+    set_amperage(analogRead(A0));
 
     if (runned){
         load_pwm_val+=20*(rpms[averaging]-n_rpm);
@@ -219,7 +236,7 @@ void loop() {
         if (load_pwm_val<0){
             load_pwm_val=0;
         }
-        fan_pwm_val+=50*(temps[i_temp_cool_in]-35);
+        fan_pwm_val+=50*(temps[i_temp_cool_in]-42);
         if (fan_pwm_val>1536){
             fan_pwm_val=1536;
         }
@@ -279,7 +296,10 @@ void loop() {
             tiks2start_error=0;
         }
     }
-    
+    lcd.setCursor(16, 1);
+    lcd.print("    ");
+    lcd.setCursor(16, 1);
+    lcd.print((float)(511-amperages[averaging])*100/1024);
     lcd.setCursor(3, 2);
     lcd.print("    ");
     lcd.setCursor(3, 2);
@@ -308,6 +328,7 @@ void loop() {
     Serial.print(i_temp);
     Serial.print("-");
     Serial.println(temps[i_temp]);
+    Serial.println(analogRead(A0));
 
     
 }
