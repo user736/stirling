@@ -12,17 +12,11 @@
 #define LCD_D7 31
 
 #define thermoDO 5 
-//46
 #define thermoCS 6 
-//48
 #define thermoCLK 7 
-//50
 #define clockHC 4 
-//44
 #define latchHC 3 
-//42
 #define dataHC 2 
-//40
 #define i_temp_head 0
 #define i_temp_cool_in 1
 #define i_temp_cool_out 2
@@ -92,11 +86,13 @@ void setup() {
     //lcd.setCursor(2, 0);
     //lcd.write("** ROTOR SUMY **");
     //lcd.setCursor(0, 1);
-    myGLCD.print("U1-      U2-      I-",1 ,20);
+    myGLCD.print("U1-       U2-       U3-",1 ,20);
+    myGLCD.print("U4-       U5-       U6-",1 ,37);
+    myGLCD.print(" I-      Pow-       En-",1 ,54);
     //lcd.setCursor(0, 2);
-    myGLCD.print("T1-      T2-      T3-", 1, 37);
+    myGLCD.print("T1-      T2-      T3-", 1, 71);
     //lcd.setCursor(0, 3);
-    myGLCD.print("RPM-      STATE-" , 1 , 54);
+    myGLCD.print("RPM-      STATE-" , 1 , 88);
 
     for(int i = 0; i < temps_count; i++){
         temps[i]=0;
@@ -272,7 +268,6 @@ void loop() {
         }
         pwm.setPWM(pwm_fan, 0, fan_pwm_val);
         pwm.setPWM(pwm_load, 0, load_pwm_val);
-        Serial.println("test");
     }else{
         if (accelerated){
             accel_tiks++;
@@ -324,43 +319,34 @@ void loop() {
             tiks2start_error=0;
         }
     }
-    //lcd.setCursor(16, 1);
-    //lcd.print("    ");
-    //lcd.setCursor(16, 1);
-    //dtostrf((float)(511-amperages[averaging*5])*100/512, buffer, 5,1);
-    //myGLCD.print(buffer, 16*22, 20);
-    //lcd.setCursor(3, 2);
-    //lcd.print("    ");
-    //lcd.setCursor(3, 2);
-    myGLCD.printNumI(temps[i_temp_head], 16*4, 37);
-    //lcd.setCursor(10, 2);
-    //lcd.print("    ");
-    //lcd.setCursor(10, 2);
-    myGLCD.printNumI(temps[i_temp_cool_in], 16*13, 37);
-    //lcd.setCursor(17, 2);
-    //lcd.print("    ");
-    //lcd.setCursor(17, 2);
-    myGLCD.printNumI(temps[i_temp_cool_out], 16*22, 37);
-    //lcd.setCursor(4,3);
-    //lcd.print("      ");
-    //lcd.setCursor(4,3);
-    myGLCD.printNumI(rpms[averaging], 16*5, 54);
-    //lcd.setCursor(16,3);
-    //lcd.print("    ");
-    //lcd.setCursor(16,3);
-    myGLCD.printNumI(ready2start, 16*17, 54);
-    myGLCD.printNumI(started, 16*18, 54);
-    myGLCD.printNumI(accelerated, 16*19, 54);
-    myGLCD.printNumI(start_error, 16*20, 54);
+
+    myGLCD.print("   ", 16*5, 20);
+    myGLCD.printNumI(analogRead(A1), 16*4, 20);
+    myGLCD.print("   ", 16*14, 20);
+    myGLCD.printNumI(analogRead(A2), 16*13, 20);
+    myGLCD.print("   ", 16*25, 20);
+    myGLCD.printNumI(analogRead(A3), 16*24, 20);
+    myGLCD.printNumI(analogRead(A4), 16*4, 37);
+    myGLCD.printNumI(analogRead(A5), 16*13, 37);
+    myGLCD.printNumI(analogRead(A6), 16*24, 37);
+
+    myGLCD.printNumF((float)(511-amperages[averaging*5])*100/512, 2, 16*4, 54);
+
+    myGLCD.printNumI(temps[i_temp_head], 16*4, 71);
+    myGLCD.printNumI(temps[i_temp_cool_in], 16*13, 71);
+    myGLCD.printNumI(temps[i_temp_cool_out], 16*22, 71);
+
+    myGLCD.printNumI(rpms[averaging], 16*5, 88);
+
+    myGLCD.printNumI(ready2start, 16*17, 88);
+    myGLCD.printNumI(started, 16*18, 88);
+    myGLCD.printNumI(accelerated, 16*19, 88);
+    myGLCD.printNumI(start_error, 16*20, 88);
     
     temps[i_temp]=thermocouple.readCelsius();
     Serial.print(i_temp);
     Serial.print("-");
     Serial.println(temps[i_temp]);
-    Serial.println((float)(511-amperages[averaging*5])*100/512);
-    Serial.println(analogRead(A5));
-    Serial.println(analogRead(A6));
-    Serial.println(analogRead(A7));
-    Serial.println(analogRead(A0));
+
     
 }
