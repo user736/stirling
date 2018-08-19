@@ -211,6 +211,7 @@ void set_averaging(int index, int val){
     }
     s+=val;
     c++;
+    temp_arr[aver-1]=val;
     temp_arr[aver]=s/c;
 }
 
@@ -347,6 +348,7 @@ void loop() {
     Serial.print(i_temp);
     Serial.print("-");
     Serial.println(temps[i_temp]);
+
 
     
 }
