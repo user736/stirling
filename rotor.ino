@@ -32,6 +32,8 @@
 #define pwm_rele 0
 #define pwm_fan 1
 #define pwm_load 2
+#define pwm_pump 3
+#define pwm_boost1 4
 #define n_rpm 500
 #define t_rpm 400
 #define ps_in 14
@@ -66,6 +68,8 @@ int fan_pwm_val=512;
 int accel_tiks=0;
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 char buffer[5];
+int pump_cicle=0;
+int boost1_val=0;
 
 extern uint8_t BigFont[];
 UTFT myGLCD(CTE32HR,38,39,40,41);
@@ -145,7 +149,7 @@ void setup() {
     EIFR=(0<<INTF7) | (0<<INTF6) | (0<<INTF5) | (0<<INTF4) | (1<<INTF3) | (0<<INTF2) | (0<<INTF1) | (0<<INTF0);
 
     pwm.begin();
-    pwm.setPWMFreq(1600);
+    pwm.setPWMFreq(1000);
     Wire.setClock(100000);
     for (int i=0; i<16; i++){
       pwm.setPWM(i,0,4096); 
@@ -216,6 +220,7 @@ void set_averaging(int index, int val){
 }
 
 void loop() {
+    boost1_val=analogRead(A8)/2;
     i_temp++;
     if (i_temp>=temps_count){
         i_temp=0;
@@ -252,7 +257,7 @@ void loop() {
     }
     set_amperage(analogRead(A0));
 
-    if (runned){
+    if (runned){      
         load_pwm_val+=20*(rpms[averaging]-n_rpm);
         if (load_pwm_val>4094){
             load_pwm_val=4094;
@@ -298,12 +303,16 @@ void loop() {
             OCR2A=OCR2A_v;
         }else{
             if (OCR2A<0xF0&&not(accelerated)){
-                OCR2A+=20;
+                OCR2A+=30;
             }
         }
     }
 
     if (accelerated||accelerating){
+      pwm.setPWM(pwm_pump, 4096, 0);
+      pump_cicle=0;
+      pwm.setPWM(pwm_boost1,0,boost1_val);
+      //pwm.setPWM(pwm_boost1, 4096, 0);
         if (rpms[averaging]==0){
             tiks2start_error++;
             if (tiks2start_error>5){
@@ -319,10 +328,17 @@ void loop() {
         }else{
             tiks2start_error=0;
         }
+    }else{
+        pwm.setPWM(pwm_boost1, 0, 4096);
+        pump_cicle++;
+        //pwm.setPWM(pwm_pump, 0, 4096);
     }
 
+    if (pump_cicle>20){
+      pwm.setPWM(pwm_pump, 0, 4096);
+    }
     myGLCD.print("   ", 16*5, 20);
-    myGLCD.printNumI(analogRead(A1), 16*4, 20);
+    myGLCD.printNumI(analogRead(A8), 16*4, 20);
     myGLCD.print("   ", 16*14, 20);
     myGLCD.printNumI(analogRead(A2), 16*13, 20);
     myGLCD.print("   ", 16*25, 20);
@@ -347,8 +363,5 @@ void loop() {
     temps[i_temp]=thermocouple.readCelsius();
     Serial.print(i_temp);
     Serial.print("-");
-    Serial.println(temps[i_temp]);
-
-
-    
+    Serial.println(temps[i_temp]);   
 }
