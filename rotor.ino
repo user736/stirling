@@ -3,6 +3,7 @@
 #include <max6675.h>
 #include <Wire.h>
 #include <Adafruit_PWMServoDriver.h>
+#include <EEPROM.h>
 
 #define LCD_RS 41
 #define LCD_E 39
@@ -70,33 +71,68 @@ Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 char buffer[5];
 int pump_cicle=0;
 int boost1_val=0;
+int mhht=0;
+int mhhc=0;
+byte mhmt=0;
+byte mhmc=0;
+byte mhst=0;
+byte mhsc=0;
+unsigned long mhv_eeprom=0;
+byte mh_tick=0;
+byte mhds=0;
+static char str[12];
 
 extern uint8_t BigFont[];
 UTFT myGLCD(CTE32HR,38,39,40,41);
 
+unsigned long EEPROM_ulong_read(int addr) {   
+  byte raw[4];
+  for(byte i = 0; i < 4; i++) raw[i] = EEPROM.read(addr+i);
+  unsigned long &num = (unsigned long&)raw;
+  return num;
+}
+ 
+void EEPROM_ulong_write(int addr, unsigned long num) {
+  byte raw[4];
+  (unsigned long&)raw = num;
+  for(byte i = 0; i < 4; i++) EEPROM.write(addr+i, raw[i]);
+}
+
+void init_mh(){
+  unsigned long val;
+  val=EEPROM_ulong_read(0);
+  mhst=val%60;
+  val=val/60;
+  mhmt=val%60;
+  mhht=val/60;  
+}
+
+void save_mh(){
+  unsigned long val=0;
+  val=mhht*3600+mhmt*60+mhst;
+  EEPROM_ulong_write(0, val);
+}
+
 void setup() {
     Serial.begin(9600);
-
+    //EEPROM_ulong_write(0,1234567890);
+    mhv_eeprom=EEPROM_ulong_read(0);
+    init_mh();
     // Setup the LCD
-  myGLCD.InitLCD();
-  myGLCD.setFont(BigFont);
-  myGLCD.clrScr();
-  myGLCD.setColor(0, 255, 0);
-  //myGLCD.fillRect(0, 0, 479, 319);
-  myGLCD.print("* ROTOR SUMY *", CENTER, 1);
-
-  
-    //lcd.begin(20, 4);
-    //lcd.setCursor(2, 0);
-    //lcd.write("** ROTOR SUMY **");
-    //lcd.setCursor(0, 1);
+    myGLCD.InitLCD();
+    myGLCD.setFont(BigFont);
+    myGLCD.clrScr();
+    myGLCD.setColor(0, 255, 0);
+    
+    myGLCD.print("* ROTOR SUMY *", CENTER, 1);
     myGLCD.print("U1-       U2-       U3-",1 ,20);
     myGLCD.print("U4-       U5-       U6-",1 ,37);
     myGLCD.print(" I-      Pow-       En-",1 ,54);
-    //lcd.setCursor(0, 2);
     myGLCD.print("T1-      T2-      T3-", 1, 71);
-    //lcd.setCursor(0, 3);
     myGLCD.print("RPM-      STATE-" , 1 , 88);
+    myGLCD.print("MH current  -", 1, 105);
+    myGLCD.print("MH in total -", 1, 122);
+    
 
     for(int i = 0; i < temps_count; i++){
         temps[i]=0;
@@ -116,6 +152,36 @@ void setup() {
     
     pinMode(ps_in, INPUT);
     pinMode(ps_out, OUTPUT);
+
+    // Timer/Counter 1 initialization
+    // Clock source: System Clock
+    // Clock value: 250,000 kHz
+    // Mode: Normal top=0xFFFF
+    // OC1A output: Disconnected
+    // OC1B output: Disconnected
+    // OC1C output: Disconnected
+    // Noise Canceler: Off
+    // Input Capture on Falling Edge
+    // Timer Period: 0,2 s
+    // Timer1 Overflow Interrupt: On
+    // Input Capture Interrupt: Off
+    // Compare A Match Interrupt: Off
+    // Compare B Match Interrupt: Off
+    // Compare C Match Interrupt: Off
+    TCCR1A=(0<<COM1A1) | (0<<COM1A0) | (0<<COM1B1) | (0<<COM1B0) | (0<<COM1C1) | (0<<COM1C0) | (0<<WGM11) | (0<<WGM10);
+    TCCR1B=(0<<ICNC1) | (0<<ICES1) | (0<<WGM13) | (0<<WGM12) | (0<<CS12) | (1<<CS11) | (1<<CS10);
+    TCNT1H=0x3C;
+    TCNT1L=0xB0;
+    ICR1H=0x00;
+    ICR1L=0x00;
+    OCR1AH=0x00;
+    OCR1AL=0x00;
+    OCR1BH=0x00;
+    OCR1BL=0x00;
+    OCR1CH=0x00;
+    OCR1CL=0x00;
+    // Timer/Counter 1 Interrupt(s) initialization
+    TIMSK1=(0<<ICIE1) | (0<<OCIE1C) | (0<<OCIE1B) | (0<<OCIE1A) | (1<<TOIE1);
 
     // Timer/Counter 2 initialization
     // Clock source: System Clock
@@ -156,6 +222,20 @@ void setup() {
     }
 
     analogReference(EXTERNAL);
+}
+
+
+ISR(TIMER1_OVF_vect){
+  // Reinitialize Timer1 value
+  TCNT1H=0x3CB0 >> 8;
+  TCNT1L=0x3CB0 & 0xff;
+  // Place your code here
+  mh_tick++;
+  if (mh_tick==5){
+    mh_tick=0;
+    mhds++;
+  }
+
 }
 
 ISR (TIMER2_COMPA_vect) {
@@ -220,6 +300,28 @@ void set_averaging(int index, int val){
 }
 
 void loop() {
+
+    if (mhds>0){
+      mhsc+=mhds;
+      mhst+=mhds;
+      mhds=0;
+      if(mhsc>59){
+        mhmc+=1;
+        mhsc-=60;
+        if (mhmc>59){
+          mhhc+=1;
+          mhmc-=60;
+        }
+      }
+      if(mhst>59){
+        mhmt+=1;
+        mhst-=60;
+        if (mhmt>59){
+          mhht+=1;
+          mhmt-=60;
+        }
+      }
+    }
     boost1_val=analogRead(A8)/2;
     i_temp++;
     if (i_temp>=temps_count){
@@ -360,8 +462,19 @@ void loop() {
     myGLCD.printNumI(accelerated, 16*19, 88);
     myGLCD.printNumI(start_error, 16*20, 88);
     
+    sprintf(str, "%05d:%02d:%02d", mhhc, mhmc, mhsc);
+    myGLCD.print(str, 16*15, 105);
+    Serial.println(str);
+    sprintf(str, "%05d:%02d:%02d", mhht, mhmt, mhst);
+    myGLCD.print(str, 16*15, 122);
+    Serial.println(str);
+    
     temps[i_temp]=thermocouple.readCelsius();
     Serial.print(i_temp);
     Serial.print("-");
-    Serial.println(temps[i_temp]);   
+    Serial.println(temps[i_temp]);
+    Serial.println(mhv_eeprom);
+    Serial.println(mhht);
+    Serial.println(mhmc);
+    Serial.println(mhsc);
 }
