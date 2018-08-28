@@ -230,12 +230,13 @@ ISR(TIMER1_OVF_vect){
   TCNT1H=0x3CB0 >> 8;
   TCNT1L=0x3CB0 & 0xff;
   // Place your code here
-  mh_tick++;
-  if (mh_tick==5){
-    mh_tick=0;
-    mhds++;
+  if (runned){
+      mh_tick++;
+      if (mh_tick==5){
+          mh_tick=0;
+          mhds++;
+      }
   }
-
 }
 
 ISR (TIMER2_COMPA_vect) {
@@ -426,6 +427,7 @@ void loop() {
                 started=false;
                 start_error=true;
                 tiks2start_error=0;
+                save_mh();
             }
         }else{
             tiks2start_error=0;
@@ -473,8 +475,4 @@ void loop() {
     Serial.print(i_temp);
     Serial.print("-");
     Serial.println(temps[i_temp]);
-    Serial.println(mhv_eeprom);
-    Serial.println(mhht);
-    Serial.println(mhmc);
-    Serial.println(mhsc);
 }
