@@ -49,8 +49,9 @@ int i_temp = 0;
 int shift_data;
 
 int RPM=0;
-int rpms[averaging+1];
-int amperages[averaging*5+1];
+int rpms[averaging+1]={0};
+int amperages[averaging*5+1]={0};
+
 int i_int=0;
 int tiks_int2d=0;
 int tiks_int=0;
@@ -82,10 +83,12 @@ byte mh_tick=0;
 byte mhds=0;
 static char str[12];
 int U_coef[]={33,34,33,33,34,34};
+int U_val[6]={0};
+int U_aver[averaging+1]={0};
 boolean shnek_v =0;
 int shnek_ce=0;
 int shnek_cd=0;
-int U_val[6]={0};
+
 
 extern uint8_t BigFont[];
 UTFT myGLCD(CTE32HR,38,39,40,41);
@@ -148,12 +151,6 @@ void setup() {
     pinMode(clockHC, OUTPUT);
     pinMode(dataHC, OUTPUT);
 
-    for (int i=1; i<averaging+1; i++){
-        rpms[i]=0;
-    }
-    for (int i=1; i<averaging*5+1; i++){
-        amperages[i]=0;
-    }
     pinMode(pin_B, INPUT_PULLUP);
     pinMode(pin_pwm,OUTPUT);
     
@@ -277,6 +274,9 @@ void set_rpms(int val){
 void set_amperage(int val){
   set_averaging(1, val);
 }
+void set_U1(int val){
+  set_averaging(2, val);
+}
 
 void set_averaging(int index, int val){  
     int *temp_arr;
@@ -284,9 +284,11 @@ void set_averaging(int index, int val){
     if (index==0){
       val=tiks_per_m/val;
       temp_arr=rpms;
-    }else{
+    }else if(index==1){
       temp_arr=amperages;
       aver=aver*5;
+    }else{
+      temp_arr=U_aver;
     }
     
     int s=0;
@@ -308,9 +310,10 @@ void set_averaging(int index, int val){
 }
 
 void loop() {
-
-    for (int i=0; i<6; i++){
-      U_val[i]=analogRead(i+1)*5/U_coef[i];
+    set_U1(analogRead(1));
+    U_val[0]=U_aver[averaging];
+    for (int i=1; i<6; i++){
+      U_val[i]=analogRead(i+1);
     }
   
     if(not(shnek_v)){
@@ -467,14 +470,14 @@ void loop() {
       pwm.setPWM(pwm_pump, 0, 4096);
     }
     myGLCD.print("   ", 16*5, 20);
-    myGLCD.printNumI(U_val[0], 16*4, 20);
+    myGLCD.printNumI(U_val[0]*5/U_coef[0], 16*4, 20);
     myGLCD.print("   ", 16*14, 20);
-    myGLCD.printNumI(U_val[1], 16*13, 20);
+    myGLCD.printNumI(U_val[1]*5/U_coef[1], 16*13, 20);
     myGLCD.print("   ", 16*25, 20);
-    myGLCD.printNumI(analogRead(A3), 16*24, 20);
-    myGLCD.printNumI(analogRead(A4), 16*4, 37);
-    myGLCD.printNumI(analogRead(A5), 16*13, 37);
-    myGLCD.printNumI(analogRead(A6), 16*24, 37);
+    myGLCD.printNumI(U_val[2]*5/U_coef[2], 16*24, 20);
+    myGLCD.printNumI(U_val[3]*5/U_coef[3], 16*4, 37);
+    myGLCD.printNumI(U_val[4]*5/U_coef[4], 16*13, 37);
+    myGLCD.printNumI(U_val[5]*5/U_coef[5], 16*24, 37);
 
     myGLCD.printNumF((float)(511-amperages[averaging*5])*100/512, 2, 16*4, 54);
 
@@ -497,14 +500,7 @@ void loop() {
     Serial.println(str);
     
     temps[i_temp]=thermocouple.readCelsius();
-    char test[30];
-    sprintf(test, "U1- %03d U2- %03d U3- %03d", analogRead(A1), analogRead(A2), analogRead(A3));
-    Serial.println(test);
-    Serial.print(i_temp);
-    Serial.print("-");
-    Serial.println(temps[i_temp]);
-    unsigned long t=0;
-    
-    t=(unsigned)3600*10;
-    Serial.println(t);
+    //char test[30];
+    //sprintf(test, "U1- %03d U2- %03d U3- %03d", analogRead(A1), analogRead(A2), analogRead(A3));
+
 }
