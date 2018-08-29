@@ -71,9 +71,9 @@ Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 char buffer[5];
 int pump_cicle=0;
 int boost1_val=0;
-int mhht=0;
-int mhhc=0;
-byte mhmt=0;
+unsigned mhht=10;
+unsigned mhhc=0;
+byte mhmt=22;
 byte mhmc=0;
 byte mhst=0;
 byte mhsc=0;
@@ -81,6 +81,11 @@ unsigned long mhv_eeprom=0;
 byte mh_tick=0;
 byte mhds=0;
 static char str[12];
+int U_coef[]={33,34,33,33,34,34};
+boolean shnek_v =0;
+int shnek_ce=0;
+int shnek_cd=0;
+int U_val[6]={0};
 
 extern uint8_t BigFont[];
 UTFT myGLCD(CTE32HR,38,39,40,41);
@@ -114,9 +119,11 @@ void save_mh(){
 }
 
 void setup() {
+
+    pinMode(9, OUTPUT);
+    
     Serial.begin(9600);
-    //EEPROM_ulong_write(0,1234567890);
-    mhv_eeprom=EEPROM_ulong_read(0);
+    save_mh();
     init_mh();
     // Setup the LCD
     myGLCD.InitLCD();
@@ -302,6 +309,24 @@ void set_averaging(int index, int val){
 
 void loop() {
 
+    for (int i=0; i<6; i++){
+      U_val[i]=analogRead(i+1)*5/U_coef[i];
+    }
+  
+    if(not(shnek_v)){
+      shnek_ce++;
+      if (shnek_ce>3){
+        shnek_ce=0;
+        shnek_v=1;
+      }
+    }else{
+      shnek_cd++;
+      if (shnek_cd>10){
+        shnek_cd=0;
+        shnek_v=0;
+      }
+    }
+    digitalWrite(9, shnek_v);
     if (mhds>0){
       mhsc+=mhds;
       mhst+=mhds;
@@ -442,9 +467,9 @@ void loop() {
       pwm.setPWM(pwm_pump, 0, 4096);
     }
     myGLCD.print("   ", 16*5, 20);
-    myGLCD.printNumI(analogRead(A8), 16*4, 20);
+    myGLCD.printNumI(U_val[0], 16*4, 20);
     myGLCD.print("   ", 16*14, 20);
-    myGLCD.printNumI(analogRead(A2), 16*13, 20);
+    myGLCD.printNumI(U_val[1], 16*13, 20);
     myGLCD.print("   ", 16*25, 20);
     myGLCD.printNumI(analogRead(A3), 16*24, 20);
     myGLCD.printNumI(analogRead(A4), 16*4, 37);
@@ -472,7 +497,14 @@ void loop() {
     Serial.println(str);
     
     temps[i_temp]=thermocouple.readCelsius();
+    char test[30];
+    sprintf(test, "U1- %03d U2- %03d U3- %03d", analogRead(A1), analogRead(A2), analogRead(A3));
+    Serial.println(test);
     Serial.print(i_temp);
     Serial.print("-");
     Serial.println(temps[i_temp]);
+    unsigned long t=0;
+    
+    t=(unsigned)3600*10;
+    Serial.println(t);
 }
