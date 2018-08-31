@@ -25,7 +25,7 @@
 
 #define OCR2A_v 110
 #define pin_B 16
-#define temp2start 20
+#define temp2start 450
 #define pin_pwm 17
 #define averaging 8
 #define tiks_per_m 29296
@@ -72,9 +72,9 @@ Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 char buffer[5];
 int pump_cicle=0;
 int boost1_val=0;
-unsigned mhht=10;
+unsigned mhht=0;
 unsigned mhhc=0;
-byte mhmt=22;
+byte mhmt=0;
 byte mhmc=0;
 byte mhst=0;
 byte mhsc=0;
@@ -85,9 +85,11 @@ static char str[12];
 int U_coef[]={33,34,33,33,34,34};
 int U_val[6]={0};
 int U_aver[averaging+1]={0};
-boolean shnek_v =0;
+boolean shnek_v =1;
 int shnek_ce=0;
 int shnek_cd=0;
+float power=0;
+float energy=0;
 
 
 extern uint8_t BigFont[];
@@ -126,7 +128,7 @@ void setup() {
     pinMode(9, OUTPUT);
     
     Serial.begin(9600);
-    save_mh();
+    //save_mh();
     init_mh();
     // Setup the LCD
     myGLCD.InitLCD();
@@ -315,20 +317,7 @@ void loop() {
     for (int i=1; i<6; i++){
       U_val[i]=analogRead(i+1);
     }
-  
-    if(not(shnek_v)){
-      shnek_ce++;
-      if (shnek_ce>3){
-        shnek_ce=0;
-        shnek_v=1;
-      }
-    }else{
-      shnek_cd++;
-      if (shnek_cd>10){
-        shnek_cd=0;
-        shnek_v=0;
-      }
-    }
+    power=(float)(511-amperages[averaging*5])*100/512*U_val[1]*5/U_coef[1];
     digitalWrite(9, shnek_v);
     if (mhds>0){
       mhsc+=mhds;
@@ -439,7 +428,26 @@ void loop() {
         }
     }
 
-    if (accelerated||accelerating){
+    if (accelerated||accelerating||started){
+
+    if(not(shnek_v)){
+      shnek_ce++;
+      if (shnek_ce>2){
+        shnek_ce=0;
+        shnek_v=1;
+      }
+    }else{
+      shnek_cd++;
+      if (shnek_cd>10){
+        shnek_cd=0;
+        shnek_v=0;
+      }
+    }
+    }else{
+       shnek_v=1;
+    }
+    
+    if (accelerated||accelerating){  
       pwm.setPWM(pwm_pump, 4096, 0);
       pump_cicle=0;
       pwm.setPWM(pwm_boost1,0,boost1_val);
@@ -469,15 +477,15 @@ void loop() {
     if (pump_cicle>20){
       pwm.setPWM(pwm_pump, 0, 4096);
     }
-    myGLCD.print("   ", 16*5, 20);
-    myGLCD.printNumI(U_val[0]*5/U_coef[0], 16*4, 20);
-    myGLCD.print("   ", 16*14, 20);
-    myGLCD.printNumI(U_val[1]*5/U_coef[1], 16*13, 20);
-    myGLCD.print("   ", 16*25, 20);
-    myGLCD.printNumI(U_val[2]*5/U_coef[2], 16*24, 20);
-    myGLCD.printNumI(U_val[3]*5/U_coef[3], 16*4, 37);
-    myGLCD.printNumI(U_val[4]*5/U_coef[4], 16*13, 37);
-    myGLCD.printNumI(U_val[5]*5/U_coef[5], 16*24, 37);
+    //myGLCD.print("   ", 16*5, 20);
+    myGLCD.printNumF(U_val[0]*5/U_coef[0], 2, 16*4, 20);
+    //myGLCD.print("   ", 16*14, 20);
+    myGLCD.printNumF(U_val[1]*5/U_coef[1], 2,16*13, 20);
+    //myGLCD.print("   ", 16*25, 20);
+    myGLCD.printNumF(U_val[2]*5/U_coef[2], 2, 16*24, 20);
+    myGLCD.printNumF(U_val[3]*5/U_coef[3], 2, 16*4, 37);
+    myGLCD.printNumF(U_val[4]*5/U_coef[4], 2, 16*13, 37);
+    myGLCD.printNumF(U_val[5]*5/U_coef[5], 2, 16*24, 37);
 
     myGLCD.printNumF((float)(511-amperages[averaging*5])*100/512, 2, 16*4, 54);
 
@@ -498,7 +506,9 @@ void loop() {
     sprintf(str, "%05d:%02d:%02d", mhht, mhmt, mhst);
     myGLCD.print(str, 16*15, 122);
     Serial.println(str);
-    
+    Serial.println(power);
+    Serial.println(energy);
+    Serial.println(temps[i_temp_head]);
     temps[i_temp]=thermocouple.readCelsius();
     //char test[30];
     //sprintf(test, "U1- %03d U2- %03d U3- %03d", analogRead(A1), analogRead(A2), analogRead(A3));
