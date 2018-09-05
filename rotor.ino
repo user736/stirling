@@ -25,14 +25,14 @@
 
 #define OCR2A_v 110
 #define pin_B 16
-#define temp2start 450
+#define temp2start -1
 #define pin_pwm 17
 #define averaging 8
 #define tiks_per_m 29296
 #define rele_pwm_val 1536
 #define pwm_rele 0
-#define pwm_fan 1
-#define pwm_load 2
+#define pwm_fan 2
+#define pwm_load 1
 #define pwm_pump 3
 #define pwm_boost1 4
 #define n_rpm 500
@@ -81,7 +81,7 @@ byte mhsc=0;
 unsigned long mhv_eeprom=0;
 byte mh_tick=0;
 byte mhds=0;
-static char str[12];
+static char str[35];
 int U_coef[]={33,34,33,33,34,34};
 int U_val[6]={0};
 int U_aver[averaging+1]={0};
@@ -90,7 +90,7 @@ int shnek_ce=0;
 int shnek_cd=0;
 float power=0;
 float energy=0;
-
+float energy_ws=0;
 
 extern uint8_t BigFont[];
 UTFT myGLCD(CTE32HR,38,39,40,41);
@@ -137,13 +137,11 @@ void setup() {
     myGLCD.setColor(0, 255, 0);
     
     myGLCD.print("* ROTOR SUMY *", CENTER, 1);
-    myGLCD.print("U1-       U2-       U3-",1 ,20);
-    myGLCD.print("U4-       U5-       U6-",1 ,37);
-    myGLCD.print(" I-      Pow-       En-",1 ,54);
-    myGLCD.print("T1-      T2-      T3-", 1, 71);
-    myGLCD.print("RPM-      STATE-" , 1 , 88);
-    myGLCD.print("MH current  -", 1, 105);
-    myGLCD.print("MH in total -", 1, 122);
+    myGLCD.print("U1-       U2-       U3-",1 ,25);
+    myGLCD.print("U4-       U5-       U6-",1 ,47);
+    myGLCD.print(" I-      Pow-       En-",1 ,69);
+    myGLCD.print("MH current  -", 1, 157);
+    myGLCD.print("MH in total -", 1, 179);
     
 
     for(int i = 0; i < temps_count; i++){
@@ -243,6 +241,7 @@ ISR(TIMER1_OVF_vect){
           mhds++;
       }
   }
+  energy_ws=energy_ws+power*0.2;
 }
 
 ISR (TIMER2_COMPA_vect) {
@@ -305,7 +304,7 @@ void set_averaging(int index, int val){
             c++;
         }
     }
-    s+=val;
+    s=s+val;
     c++;
     temp_arr[aver-1]=val;
     temp_arr[aver]=s/c;
@@ -317,7 +316,7 @@ void loop() {
     for (int i=1; i<6; i++){
       U_val[i]=analogRead(i+1);
     }
-    power=(float)(511-amperages[averaging*5])*100/512*U_val[1]*5/U_coef[1];
+    power=(float)(511-amperages[averaging*5])*100/512*U_val[0]*5/U_coef[0];
     digitalWrite(9, shnek_v);
     if (mhds>0){
       mhsc+=mhds;
@@ -432,13 +431,13 @@ void loop() {
 
     if(not(shnek_v)){
       shnek_ce++;
-      if (shnek_ce>2){
+      if (shnek_ce>3){
         shnek_ce=0;
         shnek_v=1;
       }
     }else{
       shnek_cd++;
-      if (shnek_cd>10){
+      if (shnek_cd>12){
         shnek_cd=0;
         shnek_v=0;
       }
@@ -478,39 +477,42 @@ void loop() {
       pwm.setPWM(pwm_pump, 0, 4096);
     }
     //myGLCD.print("   ", 16*5, 20);
-    myGLCD.printNumF(U_val[0]*5/U_coef[0], 2, 16*4, 20);
+    myGLCD.printNumF((float)U_val[0]*5/U_coef[0], 2, 16*4, 25);
     //myGLCD.print("   ", 16*14, 20);
-    myGLCD.printNumF(U_val[1]*5/U_coef[1], 2,16*13, 20);
-    //myGLCD.print("   ", 16*25, 20);
-    myGLCD.printNumF(U_val[2]*5/U_coef[2], 2, 16*24, 20);
-    myGLCD.printNumF(U_val[3]*5/U_coef[3], 2, 16*4, 37);
-    myGLCD.printNumF(U_val[4]*5/U_coef[4], 2, 16*13, 37);
-    myGLCD.printNumF(U_val[5]*5/U_coef[5], 2, 16*24, 37);
+    myGLCD.printNumF(U_val[1]*5/U_coef[1], 2,16*13, 25);
+    //myGLCD.print("   ", 16*25, 25);
+    myGLCD.printNumF(U_val[2]*5/U_coef[2], 2, 16*24, 25);
+    myGLCD.printNumF(U_val[3]*5/U_coef[3], 2, 16*4, 47);
+    myGLCD.printNumF(U_val[4]*5/U_coef[4], 2, 16*13, 47);
+    myGLCD.printNumF(U_val[5]*5/U_coef[5], 2, 16*24, 47);
 
-    myGLCD.printNumF((float)(511-amperages[averaging*5])*100/512, 2, 16*4, 54);
-
-    myGLCD.printNumI(temps[i_temp_head], 16*4, 71);
-    myGLCD.printNumI(temps[i_temp_cool_in], 16*13, 71);
-    myGLCD.printNumI(temps[i_temp_cool_out], 16*22, 71);
-
-    myGLCD.printNumI(rpms[averaging], 16*5, 88);
-
-    myGLCD.printNumI(ready2start, 16*17, 88);
-    myGLCD.printNumI(started, 16*18, 88);
-    myGLCD.printNumI(accelerated, 16*19, 88);
-    myGLCD.printNumI(start_error, 16*20, 88);
+    myGLCD.printNumF((float)(511-amperages[averaging*5])*100/512, 2, 16*4, 69);
+    myGLCD.printNumF(power, 2, 16*13, 69);
+    myGLCD.printNumF(energy_ws/3600, 2, 16*24, 69);
+    //myGLCD.printNumI(temps[i_temp_head], 16*4, 71);
+    //myGLCD.printNumI(temps[i_temp_cool_in], 16*13, 71);
+    //myGLCD.printNumI(temps[i_temp_cool_out], 16*22, 71);
+    sprintf(str, "TH1-%03d  TH2-%03d   ", temps[i_temp_head], temps[1]);
+    myGLCD.print(str, 16*0, 91);
+    sprintf(str, "TC1-%03d  TC2-%03d  ", temps[2], temps[3]);
+    myGLCD.print(str, 16*0, 113);
+    sprintf(str, "RPM-%04d  STATE-%d%d%d%d ",rpms[averaging], ready2start, started, accelerated,start_error);
+    myGLCD.print(str , 1 , 135);
     
     sprintf(str, "%05d:%02d:%02d", mhhc, mhmc, mhsc);
-    myGLCD.print(str, 16*15, 105);
+    myGLCD.print(str, 16*15, 157);
     Serial.println(str);
     sprintf(str, "%05d:%02d:%02d", mhht, mhmt, mhst);
-    myGLCD.print(str, 16*15, 122);
+    myGLCD.print(str, 16*15, 179);
     Serial.println(str);
-    Serial.println(power);
-    Serial.println(energy);
     Serial.println(temps[i_temp_head]);
     temps[i_temp]=thermocouple.readCelsius();
-    //char test[30];
-    //sprintf(test, "U1- %03d U2- %03d U3- %03d", analogRead(A1), analogRead(A2), analogRead(A3));
-
+    //char t4_text[30];
+    //sprintf(t4_text, "t4- %03d", temps[3]);
+    //myGLCD.print(t4_text, 16*1, 201);
+    for (int i=0; i<=averaging; i++){
+      Serial.print(U_aver[i]);
+      Serial.print(' ');
+    }
+    Serial.println(' ');
 }
