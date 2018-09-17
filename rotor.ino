@@ -31,10 +31,10 @@
 #define tiks_per_m 29296
 #define rele_pwm_val 1536
 #define pwm_rele 0
-#define pwm_fan 2
+#define pwm_fan 3
 #define pwm_load 1
-#define pwm_pump 3
-#define pwm_boost1 4
+#define pwm_pump 4
+#define pwm_boost1 2
 #define n_rpm 500
 #define t_rpm 400
 #define ps_in 14
