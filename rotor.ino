@@ -18,9 +18,10 @@
 #define clockHC 4 
 #define latchHC 3 
 #define dataHC 2 
-#define i_temp_head 0
-#define i_temp_cool_in 1
-#define i_temp_cool_out 2
+#define i_temp_head1 0
+#define i_temp_head2 1
+#define i_temp_cool_in 2
+#define i_temp_cool_out 3
 #define temps_count 4
 
 #define OCR2A_v 110
@@ -39,6 +40,7 @@
 #define t_rpm 400
 #define ps_in 14
 #define ps_out 15
+#define ref_U 2.56
 
 //LiquidCrystal lcd(LCD_RS, LCD_E, LCD_D4, LCD_D5, LCD_D6, LCD_D7);
 MAX6675 thermocouple(thermoCLK, thermoCS, thermoDO);
@@ -124,9 +126,9 @@ void save_mh(){
 }
 
 void setup() {
-
+    //analogReference(EXTERNAL);
     pinMode(9, OUTPUT);
-    
+    pinMode(10, OUTPUT);
     Serial.begin(9600);
     //save_mh();
     init_mh();
@@ -225,9 +227,8 @@ void setup() {
       pwm.setPWM(i,0,4096); 
     }
 
-    analogReference(EXTERNAL);
+    analogReference(INTERNAL2V56);
 }
-
 
 ISR(TIMER1_OVF_vect){
   // Reinitialize Timer1 value
@@ -270,7 +271,6 @@ ISR(TIMER2_OVF_vect) {
 
 void set_rpms(int val){
   set_averaging(0, val);
-
 }
 void set_amperage(int val){
   set_averaging(1, val);
@@ -316,7 +316,7 @@ void loop() {
     for (int i=1; i<6; i++){
       U_val[i]=analogRead(i+1);
     }
-    power=(float)(511-amperages[averaging*5])*100/512*U_val[0]*5/U_coef[0];
+    power=(float)(511-amperages[averaging*5])*100/512*U_val[0]*ref_U/U_coef[0];
     digitalWrite(9, shnek_v);
     if (mhds>0){
       mhsc+=mhds;
@@ -359,7 +359,7 @@ void loop() {
       OCR2A=OCR2A_v;
    }
    
-    if (temps[i_temp_head]>temp2start){
+    if (temps[i_temp_head1]>temp2start){
       ready2start=true;
     }else{
       ready2start=false;
@@ -377,6 +377,11 @@ void loop() {
     set_amperage(analogRead(A0));
 
     if (runned){      
+        if ((float)U_val[1]*ref_U/U_coef[1]<27){
+          digitalWrite(10,0);
+        }else{
+          digitalWrite(10,1);
+        }
         load_pwm_val+=20*(rpms[averaging]-n_rpm);
         if (load_pwm_val>4094){
             load_pwm_val=4094;
@@ -394,6 +399,7 @@ void loop() {
         pwm.setPWM(pwm_fan, 0, fan_pwm_val);
         pwm.setPWM(pwm_load, 0, load_pwm_val);
     }else{
+        digitalWrite(10,1);
         if (accelerated){
             accel_tiks++;
         }
@@ -477,24 +483,21 @@ void loop() {
       pwm.setPWM(pwm_pump, 0, 4096);
     }
     //myGLCD.print("   ", 16*5, 20);
-    myGLCD.printNumF((float)U_val[0]*5/U_coef[0], 2, 16*4, 25);
+    myGLCD.printNumF((float)U_val[0]*ref_U/U_coef[0], 2, 16*4, 25);
     //myGLCD.print("   ", 16*14, 20);
-    myGLCD.printNumF(U_val[1]*5/U_coef[1], 2,16*13, 25);
+    myGLCD.printNumF((float)U_val[1]*ref_U/U_coef[1], 2,16*13, 25);
     //myGLCD.print("   ", 16*25, 25);
-    myGLCD.printNumF(U_val[2]*5/U_coef[2], 2, 16*24, 25);
-    myGLCD.printNumF(U_val[3]*5/U_coef[3], 2, 16*4, 47);
-    myGLCD.printNumF(U_val[4]*5/U_coef[4], 2, 16*13, 47);
-    myGLCD.printNumF(U_val[5]*5/U_coef[5], 2, 16*24, 47);
+    myGLCD.printNumF(U_val[2]*ref_U/U_coef[2], 2, 16*24, 25);
+    myGLCD.printNumF(U_val[3]*ref_U/U_coef[3], 2, 16*4, 47);
+    myGLCD.printNumF(U_val[4]*ref_U/U_coef[4], 2, 16*13, 47);
+    myGLCD.printNumF(U_val[5]*ref_U/U_coef[5], 2, 16*24, 47);
 
     myGLCD.printNumF((float)(511-amperages[averaging*5])*100/512, 2, 16*4, 69);
     myGLCD.printNumF(power, 2, 16*13, 69);
     myGLCD.printNumF(energy_ws/3600, 2, 16*24, 69);
-    //myGLCD.printNumI(temps[i_temp_head], 16*4, 71);
-    //myGLCD.printNumI(temps[i_temp_cool_in], 16*13, 71);
-    //myGLCD.printNumI(temps[i_temp_cool_out], 16*22, 71);
-    sprintf(str, "TH1-%03d  TH2-%03d   ", temps[i_temp_head], temps[1]);
+    sprintf(str, "TH1-%03d  TH2-%03d   ", temps[i_temp_head1], temps[i_temp_head2]);
     myGLCD.print(str, 16*0, 91);
-    sprintf(str, "TC1-%03d  TC2-%03d  ", temps[2], temps[3]);
+    sprintf(str, "TC1-%03d  TC2-%03d  ", temps[i_temp_cool_in], temps[i_temp_cool_out]);
     myGLCD.print(str, 16*0, 113);
     sprintf(str, "RPM-%04d  STATE-%d%d%d%d ",rpms[averaging], ready2start, started, accelerated,start_error);
     myGLCD.print(str , 1 , 135);
@@ -505,7 +508,7 @@ void loop() {
     sprintf(str, "%05d:%02d:%02d", mhht, mhmt, mhst);
     myGLCD.print(str, 16*15, 179);
     Serial.println(str);
-    Serial.println(temps[i_temp_head]);
+    Serial.println(temps[i_temp_head1]);
     temps[i_temp]=thermocouple.readCelsius();
     //char t4_text[30];
     //sprintf(t4_text, "t4- %03d", temps[3]);
