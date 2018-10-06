@@ -40,7 +40,7 @@
 #define t_rpm 400
 #define ps_in 14
 #define ps_out 15
-#define ref_U 2.56
+#define ref_U 5
 
 //LiquidCrystal lcd(LCD_RS, LCD_E, LCD_D4, LCD_D5, LCD_D6, LCD_D7);
 MAX6675 thermocouple(thermoCLK, thermoCS, thermoDO);
@@ -227,7 +227,7 @@ void setup() {
       pwm.setPWM(i,0,4096); 
     }
 
-    analogReference(INTERNAL2V56);
+    analogReference(EXTERNAL);
 }
 
 ISR(TIMER1_OVF_vect){
@@ -364,7 +364,7 @@ void loop() {
     }else{
       ready2start=false;
     }
-    if (tiks_int>100){
+    if (tiks_int>500){
         c_tiks_flag=false;
         tiks_flag=0;                                
         tiks_int=0;
@@ -378,11 +378,11 @@ void loop() {
 
     if (runned){      
         if ((float)U_val[1]*ref_U/U_coef[1]<27){
-          digitalWrite(10,0);
+          //digitalWrite(10,0);
         }else{
           digitalWrite(10,1);
         }
-        load_pwm_val+=20*(rpms[averaging]-n_rpm);
+        load_pwm_val+=5*(rpms[averaging]-n_rpm);
         if (load_pwm_val>4094){
             load_pwm_val=4094;
         }
@@ -445,7 +445,7 @@ void loop() {
       shnek_cd++;
       if (shnek_cd>12){
         shnek_cd=0;
-        shnek_v=0;
+        //shnek_v=0;
       }
     }
     }else{
@@ -459,7 +459,7 @@ void loop() {
       //pwm.setPWM(pwm_boost1, 4096, 0);
         if (rpms[averaging]==0){
             tiks2start_error++;
-            if (tiks2start_error>5){
+            if (tiks2start_error>3){
                 pwm.setPWM(pwm_rele, 0, 4096);
                 OCR2A=OCR2A_v;
                 accelerating=false;
