@@ -5,6 +5,10 @@
 #include <Adafruit_PWMServoDriver.h>
 #include <EEPROM.h>
 
+#define tc_delta 3
+#define shnek_e_delta 15
+# define shnek_d_delta 60
+
 #define LCD_RS 41
 #define LCD_E 39
 #define LCD_D4 37
@@ -93,6 +97,8 @@ int shnek_cd=0;
 float power=0;
 float energy=0;
 float energy_ws=0;
+byte clock_source=0;
+byte tc_counter=0;
 
 extern uint8_t BigFont[];
 UTFT myGLCD(CTE32HR,38,39,40,41);
@@ -242,6 +248,7 @@ ISR(TIMER1_OVF_vect){
           mhds++;
       }
   }
+  clock_source++;
   energy_ws=energy_ws+power*0.2;
 }
 
@@ -311,6 +318,20 @@ void set_averaging(int index, int val){
 }
 
 void loop() {
+    tc_counter+=clock_source;
+    if (tc_counter>=tc_delta){
+      temps[i_temp]=thermocouple.readCelsius();
+      digitalWrite(latchHC, LOW);
+      shift_data = 1<<i_temp;
+      shiftOut(dataHC, clockHC, MSBFIRST, (shift_data >> 8)); 
+      shiftOut(dataHC, clockHC, MSBFIRST, shift_data);
+      digitalWrite(latchHC, HIGH);
+      tc_counter=0;
+    }
+    shnek_ce+=clock_source;
+    shnek_cd+=clock_source;
+    clock_source=0;
+
     set_U1(analogRead(1));
     U_val[0]=U_aver[averaging];
     for (int i=1; i<6; i++){
@@ -344,12 +365,7 @@ void loop() {
     if (i_temp>=temps_count){
         i_temp=0;
     }
-    digitalWrite(latchHC, LOW);
-    shift_data = 1<<i_temp;
-    shiftOut(dataHC, clockHC, MSBFIRST, (shift_data >> 8)); 
-    shiftOut(dataHC, clockHC, MSBFIRST, shift_data);
-    digitalWrite(latchHC, HIGH);
-    delay(550);
+
 
    if (not(digitalRead(pin_B))){
       started=true;
@@ -436,15 +452,13 @@ void loop() {
     if (accelerated||accelerating||started){
 
     if(not(shnek_v)){
-      shnek_ce++;
-      if (shnek_ce>3){
-        shnek_ce=0;
+      if (shnek_ce>shnek_e_delta){
+        shnek_cd=0;
         shnek_v=1;
       }
     }else{
-      shnek_cd++;
-      if (shnek_cd>12){
-        shnek_cd=0;
+      if (shnek_cd>shnek_d_delta){
+        shnek_ce=0;
         //shnek_v=0;
       }
     }
@@ -500,22 +514,13 @@ void loop() {
     sprintf(str, "TC1-%03d  TC2-%03d  ", temps[i_temp_cool_in], temps[i_temp_cool_out]);
     myGLCD.print(str, 16*0, 113);
     sprintf(str, "RPM-%04d  STATE-%d%d%d%d ",rpms[averaging], ready2start, started, accelerated,start_error);
-    myGLCD.print(str , 1 , 135);
-    
-    sprintf(str, "%05d:%02d:%02d", mhhc, mhmc, mhsc);
-    myGLCD.print(str, 16*15, 157);
-    Serial.println(str);
+    myGLCD.print(str , 1 , 135);   
     sprintf(str, "%05d:%02d:%02d", mhht, mhmt, mhst);
     myGLCD.print(str, 16*15, 179);
-    Serial.println(str);
-    Serial.println(temps[i_temp_head1]);
-    temps[i_temp]=thermocouple.readCelsius();
+
+    
     //char t4_text[30];
     //sprintf(t4_text, "t4- %03d", temps[3]);
     //myGLCD.print(t4_text, 16*1, 201);
-    for (int i=0; i<=averaging; i++){
-      Serial.print(U_aver[i]);
-      Serial.print(' ');
-    }
-    Serial.println(' ');
+
 }
