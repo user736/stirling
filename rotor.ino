@@ -99,6 +99,7 @@ float energy=0;
 float energy_ws=0;
 byte clock_source=0;
 byte tc_counter=0;
+byte test_v=0;
 
 extern uint8_t BigFont[];
 UTFT myGLCD(CTE32HR,38,39,40,41);
@@ -135,6 +136,7 @@ void setup() {
     //analogReference(EXTERNAL);
     pinMode(9, OUTPUT);
     pinMode(10, OUTPUT);
+    pinMode(11,OUTPUT);
     Serial.begin(9600);
     //save_mh();
     init_mh();
@@ -318,9 +320,16 @@ void set_averaging(int index, int val){
 }
 
 void loop() {
+    test_v=1-test_v;
+    digitalWrite(11,test_v);
+  
     tc_counter+=clock_source;
     if (tc_counter>=tc_delta){
       temps[i_temp]=thermocouple.readCelsius();
+      i_temp++;
+      if (i_temp>=temps_count){
+          i_temp=0;
+      }
       digitalWrite(latchHC, LOW);
       shift_data = 1<<i_temp;
       shiftOut(dataHC, clockHC, MSBFIRST, (shift_data >> 8)); 
@@ -361,11 +370,6 @@ void loop() {
       }
     }
     boost1_val=analogRead(A8)/2;
-    i_temp++;
-    if (i_temp>=temps_count){
-        i_temp=0;
-    }
-
 
    if (not(digitalRead(pin_B))){
       started=true;
@@ -473,7 +477,7 @@ void loop() {
       //pwm.setPWM(pwm_boost1, 4096, 0);
         if (rpms[averaging]==0){
             tiks2start_error++;
-            if (tiks2start_error>3){
+            if (tiks2start_error>9){ //should be refactored
                 pwm.setPWM(pwm_rele, 0, 4096);
                 OCR2A=OCR2A_v;
                 accelerating=false;
@@ -515,8 +519,10 @@ void loop() {
     myGLCD.print(str, 16*0, 113);
     sprintf(str, "RPM-%04d  STATE-%d%d%d%d ",rpms[averaging], ready2start, started, accelerated,start_error);
     myGLCD.print(str , 1 , 135);   
-    sprintf(str, "%05d:%02d:%02d", mhht, mhmt, mhst);
-    myGLCD.print(str, 16*15, 179);
+    sprintf(str, "MH current - %05d:%02d:%02d", mhhc, mhmc, mhsc);
+    myGLCD.print(str, 16*1, 157);
+    sprintf(str, "MH in total - %05d:%02d:%02d", mhht, mhmt, mhst);
+    myGLCD.print(str, 16*1, 179);
 
     
     //char t4_text[30];
