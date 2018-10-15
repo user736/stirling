@@ -100,6 +100,7 @@ float energy_ws=0;
 byte clock_source=0;
 byte tc_counter=0;
 byte test_v=0;
+byte i_line=0;
 
 extern uint8_t BigFont[];
 UTFT myGLCD(CTE32HR,38,39,40,41);
@@ -501,30 +502,49 @@ void loop() {
       pwm.setPWM(pwm_pump, 0, 4096);
     }
     //myGLCD.print("   ", 16*5, 20);
-    myGLCD.printNumF((float)U_val[0]*ref_U/U_coef[0], 2, 16*4, 25);
+    switch (i_line){
+    case 0:
+      myGLCD.printNumF((float)U_val[0]*ref_U/U_coef[0], 2, 16*4, 25);
     //myGLCD.print("   ", 16*14, 20);
-    myGLCD.printNumF((float)U_val[1]*ref_U/U_coef[1], 2,16*13, 25);
+      myGLCD.printNumF((float)U_val[1]*ref_U/U_coef[1], 2,16*13, 25);
     //myGLCD.print("   ", 16*25, 25);
-    myGLCD.printNumF(U_val[2]*ref_U/U_coef[2], 2, 16*24, 25);
-    myGLCD.printNumF(U_val[3]*ref_U/U_coef[3], 2, 16*4, 47);
-    myGLCD.printNumF(U_val[4]*ref_U/U_coef[4], 2, 16*13, 47);
-    myGLCD.printNumF(U_val[5]*ref_U/U_coef[5], 2, 16*24, 47);
-
-    myGLCD.printNumF((float)(511-amperages[averaging*5])*100/512, 2, 16*4, 69);
-    myGLCD.printNumF(power, 2, 16*13, 69);
-    myGLCD.printNumF(energy_ws/3600, 2, 16*24, 69);
-    sprintf(str, "TH1-%03d  TH2-%03d   ", temps[i_temp_head1], temps[i_temp_head2]);
-    myGLCD.print(str, 16*0, 91);
-    sprintf(str, "TC1-%03d  TC2-%03d  ", temps[i_temp_cool_in], temps[i_temp_cool_out]);
-    myGLCD.print(str, 16*0, 113);
-    sprintf(str, "RPM-%04d  STATE-%d%d%d%d ",rpms[averaging], ready2start, started, accelerated,start_error);
-    myGLCD.print(str , 1 , 135);   
-    sprintf(str, "MH current - %05d:%02d:%02d", mhhc, mhmc, mhsc);
-    myGLCD.print(str, 16*1, 157);
-    sprintf(str, "MH in total - %05d:%02d:%02d", mhht, mhmt, mhst);
-    myGLCD.print(str, 16*1, 179);
-
-    
+      myGLCD.printNumF(U_val[2]*ref_U/U_coef[2], 2, 16*24, 25);
+    break;
+    case 1:
+      myGLCD.printNumF(U_val[3]*ref_U/U_coef[3], 2, 16*4, 47);
+      myGLCD.printNumF(U_val[4]*ref_U/U_coef[4], 2, 16*13, 47);
+      myGLCD.printNumF(U_val[5]*ref_U/U_coef[5], 2, 16*24, 47);
+    break;
+    case 2:
+      myGLCD.printNumF((float)(511-amperages[averaging*5])*100/512, 2, 16*4, 69);
+      myGLCD.printNumF(power, 2, 16*13, 69);
+      myGLCD.printNumF(energy_ws/3600, 2, 16*24, 69);
+    break;
+    case 3:
+      sprintf(str, "TH1-%03d  TH2-%03d   ", temps[i_temp_head1], temps[i_temp_head2]);
+      myGLCD.print(str, 16*0, 91);
+    break;
+    case 4:
+      sprintf(str, "TC1-%03d  TC2-%03d  ", temps[i_temp_cool_in], temps[i_temp_cool_out]);
+      myGLCD.print(str, 16*0, 113);
+    break;
+    case 5:
+      sprintf(str, "RPM-%04d  STATE-%d%d%d%d ",rpms[averaging], ready2start, started, accelerated,start_error);
+      myGLCD.print(str , 1 , 135);   
+    break;
+    case 6:
+      sprintf(str, "MH current - %05d:%02d:%02d", mhhc, mhmc, mhsc);
+      myGLCD.print(str, 16*1, 157);
+    break;
+    case 7:
+      sprintf(str, "MH in total - %05d:%02d:%02d", mhht, mhmt, mhst);
+      myGLCD.print(str, 16*1, 179);
+    break;
+    }
+    i_line++;
+    if (i_line>7){
+      i_line=0;
+    }
     //char t4_text[30];
     //sprintf(t4_text, "t4- %03d", temps[3]);
     //myGLCD.print(t4_text, 16*1, 201);
