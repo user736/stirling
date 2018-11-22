@@ -501,10 +501,6 @@ void loop() {
     shnek_d_v=analogRead(A9)/8;
     if ((shnek_e_v!=shnek_e_delta) || (shnek_d_v!=shnek_d_delta)) {
       sprintf(str, "SNEK_EN-%02d SHNEK_DIS-%02d", shnek_e_v, shnek_d_v);
-      Serial.println(shnek_e_v);
-      Serial.println(shnek_e_delta);
-      Serial.println(shnek_d_v);
-      Serial.println(shnek_d_delta);
       myGLCD.print(str, 16*1, 220);
       shnek_e_delta=shnek_e_v;
       shnek_d_delta-shnek_d_v;
