@@ -31,7 +31,7 @@
 #define pin_B 16
 #define temp2start -1
 #define pin_pwm 17
-#define averaging 8
+#define averaging 16
 #define tiks_per_m 29296
 #define rele_pwm_val 1536
 #define pwm_rele 0
@@ -92,7 +92,9 @@ static char str[35];
 int U_coef[]={33,34,33,33,34,34};
 int U_val[6]={0};
 int U_aver[averaging+1]={0};
+int UB_aver[averaging+1]={0};
 byte U_pos=0;
+byte UB_pos=0; 
 boolean shnek_v =1;
 int shnek_ce=0;
 int shnek_cd=0;
@@ -110,6 +112,9 @@ byte shnek_d_v;
 
 boolean fan_en=false;
 boolean acc_dis=false;
+boolean acc_charge=true;
+byte acc_ch_m=0;
+byte acc_ch_h=0;
 
 extern uint8_t BigFont[];
 UTFT myGLCD(CTE32HR,38,39,40,41);
@@ -294,7 +299,7 @@ ISR(TIMER2_OVF_vect) {
 }
 
 void set_rpms(){
-  set_averaging(0, rpms_pos);
+  set_averaging(rpms, rpms_pos);
 }
 void set_amperage(int val){
   amperages[amps_pos]=val;
@@ -302,31 +307,37 @@ void set_amperage(int val){
     if (amps_pos>averaging){
       amps_pos=0;
     }
-  set_averaging(1, amps_pos);
+  set_averaging(amperages, amps_pos);
 }
 void set_U1(int val){
+  Serial.println(val);
+  if ((val<30)&&(U_aver[averaging]!=0)){
+    set_zero(U_aver,averaging);
+  }
   U_aver[U_pos]=val;
   U_pos++;
     if (U_pos>averaging){
       U_pos=0;
     }
-  set_averaging(2, U_pos);
+  set_averaging(U_aver, U_pos);
+}
+
+void set_UB(int val){
+  UB_aver[UB_pos]=val;
+  UB_pos++;
+    if (UB_pos>averaging){
+      UB_pos=0;
+    }
+  set_averaging(UB_aver, UB_pos);
 }
 
 void set_zero(int *arr, int a_size){
   for (int i=0; i<a_size; i++) arr[i]=0;
 }
 
-void set_averaging(int index, int pos){  
-    int *temp_arr;
+void set_averaging(int *temp_arr, int pos){  
+    
     int aver=averaging;
-    if (index==0){
-      temp_arr=rpms;
-    }else if(index==1){
-      temp_arr=amperages;
-    }else{
-      temp_arr=U_aver;
-    }
     
     int s=0;
     int c=0;
@@ -370,7 +381,9 @@ void loop() {
 
     set_U1(analogRead(1));
     U_val[0]=U_aver[averaging];
-    for (int i=1; i<6; i++){
+    set_UB(analogRead(2));
+    U_val[1]=UB_aver[averaging];
+    for (int i=2; i<6; i++){
       U_val[i]=analogRead(i+1);
     }
     power=(float)(511-amperages[averaging])*100/512*U_val[0]*ref_U/U_coef[0];
@@ -404,6 +417,7 @@ void loop() {
       runned=false;
       start_error=false;
       OCR2A=OCR2A_v;
+      acc_charge=true;
    }
    
     if (temps[i_temp_head1]>temp2start){
@@ -415,12 +429,15 @@ void loop() {
         //c_tiks_flag=false;
         tiks_flag=0;                                
         tiks_int=0;
-        rpms[rpms_pos]=0;
-        rpms_pos++;
-        if(rpms_pos>=averaging){
-          rpms_pos=0;
+        if(rpms[averaging]!=0){
+          set_zero(rpms, averaging);
         }
-        //rpms[averaging]=0;
+        //rpms[rpms_pos]=0;
+        //rpms_pos++;
+        //if(rpms_pos>=averaging){
+        //  rpms_pos=0;
+        //}
+        
     }
     //if(tiks_flag){
         //tiks_flag=0;
@@ -441,11 +458,20 @@ void loop() {
       }
     }
 
-    if (runned and fan_en){      
-        if ((float)U_val[1]*ref_U/U_coef[1]<28){
-          digitalWrite(10,0);
+    if (runned and fan_en){  
+        if(acc_charge){    
+          if ((float)U_val[1]*ref_U/U_coef[1]<28.5){
+            digitalWrite(10,0);
+          }else{
+            digitalWrite(10,1);
+            acc_charge=false;
+            acc_ch_h=mhhc+1;
+            acc_ch_m=mhmc;
+          }
         }else{
-          digitalWrite(10,1);
+          if ((acc_ch_h<mhhc)||(acc_ch_h==mhhc&&acc_ch_m<mhmc)){
+            acc_charge=true;
+          }
         }
         load_pwm_val+=(rpms[averaging]-n_rpm);
         if (load_pwm_val>4094){
@@ -488,7 +514,7 @@ void loop() {
             accelerated=true;
             accelerating=false;
             started=false;
-            delay(2000);
+            //delay(2000);
             pwm.setPWM(pwm_rele, 0, 4096);
             OCR2A=OCR2A_v;
         }else{
@@ -496,6 +522,11 @@ void loop() {
                 OCR2A+=5;
             }
         }
+    }else{
+      if (rpms[averaging]>200){
+        runned=true;
+        accelerated=true;
+      }
     }
     shnek_e_v=analogRead(A8)/16;
     shnek_d_v=analogRead(A9)/8;
@@ -503,7 +534,7 @@ void loop() {
       sprintf(str, "SNEK_EN-%02d SHNEK_DIS-%02d", shnek_e_v, shnek_d_v);
       myGLCD.print(str, 16*1, 220);
       shnek_e_delta=shnek_e_v;
-      shnek_d_delta-shnek_d_v;
+      shnek_d_delta=shnek_d_v;
       
     }
     
@@ -531,7 +562,7 @@ void loop() {
       //pwm.setPWM(pwm_boost1, 4096, 0);
         if (rpms[averaging]==0){
             tiks2start_error++;
-            if (tiks2start_error>20){ //should be refactored
+            if (tiks2start_error>70){ //should be refactored
                 pwm.setPWM(pwm_rele, 0, 4096);
                 OCR2A=OCR2A_v;
                 accelerating=false;
@@ -552,7 +583,7 @@ void loop() {
         //digitalWrite(11,1);
     }
 
-    if (pump_cicle>400){
+    if (pump_cicle>2000){
       pwm.setPWM(pwm_pump, 0, 4096);
       digitalWrite(11,1);
     }
@@ -580,11 +611,11 @@ void loop() {
       myGLCD.print(str, 16*0, 91);
     break;
     case 4:
-      sprintf(str, "TC1-%03d  TC2-%03d  TW-%03d", temps[i_temp_cool_in], temps[i_temp_cool_out], temps[4]);
+      sprintf(str, "TC1-%03d  TC2-%03d  TW-%03d    ", temps[i_temp_cool_in], temps[i_temp_cool_out], temps[4]);
       myGLCD.print(str, 16*0, 113);
     break;
     case 5:
-      sprintf(str, "RPM-%04d  STATE-%d%d%d%d ",rpms[averaging], ready2start, started, accelerated,start_error);
+      sprintf(str, "RPM-%04d  STATE-%d%d%d%d%d ",rpms[averaging], ready2start, started, accelerated,runned, start_error);
       myGLCD.print(str , 1 , 135);   
     break;
     case 6:
