@@ -25,7 +25,7 @@
 #define i_temp_head2 1
 #define i_temp_cool_in 2
 #define i_temp_cool_out 3
-#define temps_count 5
+#define temps_count 8
 
 #define OCR2A_v 110
 #define pin_B 16
@@ -41,8 +41,8 @@
 #define pwm_boost1 2
 #define n_rpm 500
 #define t_rpm 350
-#define ps_in 14
-#define ps_out 15
+#define ps_in 15
+#define ps_out 14
 #define ref_U 5
 
 //LiquidCrystal lcd(LCD_RS, LCD_E, LCD_D4, LCD_D5, LCD_D6, LCD_D7);
@@ -370,6 +370,7 @@ void loop() {
       }
       digitalWrite(latchHC, LOW);
       shift_data = 1<<i_temp;
+      Serial.println(shift_data);
       shiftOut(dataHC, clockHC, MSBFIRST, (shift_data >> 8)); 
       shiftOut(dataHC, clockHC, MSBFIRST, shift_data);
       digitalWrite(latchHC, HIGH);
@@ -386,7 +387,7 @@ void loop() {
     for (int i=2; i<6; i++){
       U_val[i]=analogRead(i+1);
     }
-    power=(float)(511-amperages[averaging])*100/512*U_val[0]*ref_U/U_coef[0];
+    power=(float)(amperages[averaging]-512)*100/512*U_val[0]*ref_U/U_coef[0];
     digitalWrite(9, shnek_v);
     if (mhds>0){
       mhsc+=mhds;
@@ -418,6 +419,7 @@ void loop() {
       start_error=false;
       OCR2A=OCR2A_v;
       acc_charge=true;
+      digitalWrite(ps_out, 1);
    }
    
     if (temps[i_temp_head1]>temp2start){
@@ -502,7 +504,7 @@ void loop() {
         pwm.setPWM(pwm_load, 0, 4096);
     }
 
-    digitalWrite(ps_out, accelerated*digitalRead(ps_in)*acc_dis);
+    //digitalWrite(ps_out, accelerated*digitalRead(ps_in)*acc_dis);
     
     if (accelerating||started&&ready2start){
         if (not(accelerating)){
@@ -514,7 +516,6 @@ void loop() {
             accelerated=true;
             accelerating=false;
             started=false;
-            //delay(2000);
             pwm.setPWM(pwm_rele, 0, 4096);
             OCR2A=OCR2A_v;
         }else{
@@ -526,13 +527,14 @@ void loop() {
       if (rpms[averaging]>200){
         runned=true;
         accelerated=true;
+        digitalWrite(ps_out, 0);
       }
     }
     shnek_e_v=analogRead(A8)/16;
     shnek_d_v=analogRead(A9)/8;
     if ((shnek_e_v!=shnek_e_delta) || (shnek_d_v!=shnek_d_delta)) {
-      sprintf(str, "SNEK_EN-%02d SHNEK_DIS-%02d", shnek_e_v, shnek_d_v);
-      myGLCD.print(str, 16*1, 220);
+      sprintf(str, "SNEK_EN-%02d  SHNEK_DIS-%02d  ", shnek_e_v, shnek_d_v);
+      myGLCD.print(str, 16*1, 260);
       shnek_e_delta=shnek_e_v;
       shnek_d_delta=shnek_d_v;
       
@@ -572,6 +574,7 @@ void loop() {
                 start_error=true;
                 tiks2start_error=0;
                 save_mh();
+                digitalWrite(ps_out,1);
             }
         }else{
             tiks2start_error=0;
@@ -586,6 +589,7 @@ void loop() {
     if (pump_cicle>2000){
       pwm.setPWM(pwm_pump, 0, 4096);
       digitalWrite(11,1);
+      digitalWrite(ps_out,0);
     }
     //myGLCD.print("   ", 16*5, 20);
     switch (i_line){
@@ -602,7 +606,7 @@ void loop() {
       myGLCD.printNumF(U_val[5]*ref_U/U_coef[5], 2, 16*24, 47);
     break;
     case 2:
-      myGLCD.printNumF((float)(511-amperages[averaging])*100/512, 2, 16*4, 69);
+      myGLCD.printNumF((float)(amperages[averaging]-507)*100/512, 2, 16*3, 69);
       myGLCD.printNumF(power, 2, 16*13, 69);
       myGLCD.printNumF(energy_ws/3600, 2, 16*24, 69);
     break;
@@ -611,28 +615,32 @@ void loop() {
       myGLCD.print(str, 16*0, 91);
     break;
     case 4:
-      sprintf(str, "TC1-%03d  TC2-%03d  TW-%03d    ", temps[i_temp_cool_in], temps[i_temp_cool_out], temps[4]);
+      sprintf(str, "TC1-%03d  TC2-%03d  TC3-%03d    ", temps[i_temp_cool_in], temps[i_temp_cool_out], temps[4]);
       myGLCD.print(str, 16*0, 113);
     break;
     case 5:
-      sprintf(str, "RPM-%04d  STATE-%d%d%d%d%d ",rpms[averaging], ready2start, started, accelerated,runned, start_error);
-      myGLCD.print(str , 1 , 135);   
+      sprintf(str, "TN1-%03d  TN2-%03d  TN3-%03d    ", temps[5], temps[6], temps[7]);
+      myGLCD.print(str, 16*0, 135);
     break;
     case 6:
-      sprintf(str, "MH current - %05d:%02d:%02d", mhhc, mhmc, mhsc);
-      myGLCD.print(str, 16*1, 157);
+      sprintf(str, "RPM-%04d  STATE-%d%d%d%d%d ",rpms[averaging], ready2start, started, accelerated,runned, start_error);
+      myGLCD.print(str , 1 , 157);   
     break;
     case 7:
-      sprintf(str, "MH in total - %05d:%02d:%02d", mhht, mhmt, mhst);
+      sprintf(str, "MH current - %05d:%02d:%02d", mhhc, mhmc, mhsc);
       myGLCD.print(str, 16*1, 179);
+    break;
+    case 8:
+      sprintf(str, "MH in total - %05d:%02d:%02d", mhht, mhmt, mhst);
+      myGLCD.print(str, 16*1, 201);
     break;
     }
     i_line++;
-    if (i_line>7){
+    if (i_line>8){
       i_line=0;
     }
     //char t4_text[30];
     //sprintf(t4_text, "t4- %03d", temps[3]);
-    //myGLCD.print(t4_text, 16*1, 201);
+    //myGLCD.print(t4_text, 16*1, 223);
 
 }
