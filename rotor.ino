@@ -5,7 +5,7 @@
 #include <Adafruit_PWMServoDriver.h>
 #include <EEPROM.h>
 
-#define tc_delta 3
+#define tc_delta 4
 
 
 #define LCD_RS 41
@@ -34,10 +34,10 @@
 #define averaging 16
 #define tiks_per_m 29296
 #define rele_pwm_val 1536
-#define pwm_rele 0
+#define pwm_rele 5
 #define pwm_fan 3
 #define pwm_load 1
-#define pwm_pump 4
+#define pwm_pump 0
 #define pwm_boost1 2
 #define n_rpm 500
 #define t_rpm 350
@@ -72,8 +72,9 @@ boolean accelerating=false;
 boolean start_error=false;
 boolean runned=false;
 int tiks2start_error=0;
-int load_pwm_val=512;
+int load_pwm_val=0;
 int fan_pwm_val=512;
+int max_fan_pwm_val=512;
 int accel_tiks=0;
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 char buffer[5];
@@ -360,7 +361,8 @@ void set_averaging(int *temp_arr, int pos){
 void loop() {
     //test_v=1-test_v;
     //digitalWrite(11,test_v);
-  
+    
+    
     tc_counter+=clock_source;
     if (tc_counter>=tc_delta){
       temps[i_temp]=thermocouple.readCelsius();
@@ -387,7 +389,7 @@ void loop() {
     for (int i=2; i<6; i++){
       U_val[i]=analogRead(i+1);
     }
-    power=(float)(amperages[averaging]-512)*100/512*U_val[0]*ref_U/U_coef[0];
+    power=(float)(amperages[averaging]-507)*100/512*U_val[0]*ref_U/U_coef[0];
     digitalWrite(9, shnek_v);
     if (mhds>0){
       mhsc+=mhds;
@@ -482,9 +484,18 @@ void loop() {
         if (load_pwm_val<0){
             load_pwm_val=0;
         }
-        fan_pwm_val+=50*(temps[i_temp_cool_in]-42);
-        if (fan_pwm_val>1536){
-            fan_pwm_val=1536;
+        if (temps[i_temp_cool_in]<40){
+        max_fan_pwm_val=768;
+        }else{
+          if(temps[i_temp_cool_in]<43){
+        
+        max_fan_pwm_val=1024;}else{
+             max_fan_pwm_val=1280;
+        }
+        }
+        fan_pwm_val+=50*(temps[i_temp_cool_in]-35);
+        if (fan_pwm_val>max_fan_pwm_val){
+            fan_pwm_val=max_fan_pwm_val;
         }
         if (fan_pwm_val<384){
             fan_pwm_val=384;
@@ -502,6 +513,7 @@ void loop() {
         }
         pwm.setPWM(pwm_fan, 0, 4096);
         pwm.setPWM(pwm_load, 0, 4096);
+        Serial.println("test");
     }
 
     //digitalWrite(ps_out, accelerated*digitalRead(ps_in)*acc_dis);
