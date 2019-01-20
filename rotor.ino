@@ -25,21 +25,21 @@
 #define i_temp_head2 1
 #define i_temp_cool_in 2
 #define i_temp_cool_out 3
-#define temps_count 8
+#define temps_count 10
 
 #define OCR2A_v 110
 #define pin_B 16
-#define temp2start -1
+#define temp2start 400
 #define pin_pwm 17
+#define pin_pump 11
 #define averaging 16
 #define tiks_per_m 29296
 #define rele_pwm_val 1536
 #define pwm_rele 5
 #define pwm_fan 3
 #define pwm_load 1
-#define pwm_pump 0
-#define pwm_boost1 2
-#define n_rpm 500
+#define pwm_pump 2
+#define pwm_boost1 4
 #define t_rpm 350
 #define ps_in 15
 #define ps_out 14
@@ -52,6 +52,9 @@ MAX6675 thermocouple(thermoCLK, thermoCS, thermoDO);
 int temps[temps_count];
 int i_temp = 0;
 int shift_data;
+int n_rpm=500;
+int n_rpm_delta=500;
+
 
 int RPM=0;
 int rpms[averaging+1]={0};
@@ -80,6 +83,7 @@ Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 char buffer[5];
 int pump_cicle=0;
 int boost1_val=0;
+int boost1_val_delta=0;
 unsigned mhht=0;
 unsigned mhhc=0;
 byte mhmt=0;
@@ -152,7 +156,8 @@ void setup() {
     //analogReference(EXTERNAL);
     pinMode(9, OUTPUT);
     pinMode(10, OUTPUT);
-    pinMode(11,OUTPUT);
+    pinMode(pin_pump,OUTPUT);
+    digitalWrite(pin_pump,1);
     Serial.begin(9600);
     //save_mh();
     init_mh();
@@ -311,7 +316,6 @@ void set_amperage(int val){
   set_averaging(amperages, amps_pos);
 }
 void set_U1(int val){
-  Serial.println(val);
   if ((val<30)&&(U_aver[averaging]!=0)){
     set_zero(U_aver,averaging);
   }
@@ -372,7 +376,7 @@ void loop() {
       }
       digitalWrite(latchHC, LOW);
       shift_data = 1<<i_temp;
-      Serial.println(shift_data);
+      //Serial.println(shift_data);
       shiftOut(dataHC, clockHC, MSBFIRST, (shift_data >> 8)); 
       shiftOut(dataHC, clockHC, MSBFIRST, shift_data);
       digitalWrite(latchHC, HIGH);
@@ -412,8 +416,15 @@ void loop() {
         }
       }
     }
-    //boost1_val=analogRead(A8)/2;
-
+    boost1_val_delta=analogRead(A15)*2;
+    pwm.setPWM(pwm_boost1,0,boost1_val);
+    n_rpm=500+analogRead(A14)/5;
+   if ((boost1_val!=boost1_val_delta)||(n_rpm_delta!=n_rpm)) {
+      boost1_val=boost1_val_delta;
+      n_rpm_delta=n_rpm;
+      sprintf(str, "BOOST_VAL-%04d  N_RPM-%4d   ", boost1_val, n_rpm);
+      myGLCD.print(str, 16*1, 280);
+   }
    if (not(digitalRead(pin_B))){
       started=true;
       accelerated=false;
@@ -422,6 +433,7 @@ void loop() {
       OCR2A=OCR2A_v;
       acc_charge=true;
       digitalWrite(ps_out, 1);
+      pump_cicle=0;
    }
    
     if (temps[i_temp_head1]>temp2start){
@@ -429,7 +441,7 @@ void loop() {
     }else{
       ready2start=false;
     }
-    if (tiks_int>200){
+    if (tiks_int>500){
         //c_tiks_flag=false;
         tiks_flag=0;                                
         tiks_int=0;
@@ -513,7 +525,6 @@ void loop() {
         }
         pwm.setPWM(pwm_fan, 0, 4096);
         pwm.setPWM(pwm_load, 0, 4096);
-        Serial.println("test");
     }
 
     //digitalWrite(ps_out, accelerated*digitalRead(ps_in)*acc_dis);
@@ -549,7 +560,6 @@ void loop() {
       myGLCD.print(str, 16*1, 260);
       shnek_e_delta=shnek_e_v;
       shnek_d_delta=shnek_d_v;
-      
     }
     
     if (accelerated||accelerating||started){
@@ -569,10 +579,10 @@ void loop() {
     }
     
     if (accelerated||accelerating){ 
-      digitalWrite(11,0);
+      digitalWrite(pin_pump,0);
       pwm.setPWM(pwm_pump, 4096, 0);
       pump_cicle=0;
-      pwm.setPWM(pwm_boost1,0,boost1_val);
+      //pwm.setPWM(pwm_boost1,0,boost1_val);
       //pwm.setPWM(pwm_boost1, 4096, 0);
         if (rpms[averaging]==0){
             tiks2start_error++;
@@ -592,15 +602,17 @@ void loop() {
             tiks2start_error=0;
         }
     }else{
-        pwm.setPWM(pwm_boost1, 0, 4096);
-        pump_cicle++;
+        //pwm.setPWM(pwm_boost1, 0, 4096);
+        if (not started){
+            pump_cicle++;
+        }
         //pwm.setPWM(pwm_pump, 0, 4096);
         //digitalWrite(11,1);
     }
-
+Serial.println(pump_cicle);
     if (pump_cicle>2000){
       pwm.setPWM(pwm_pump, 0, 4096);
-      digitalWrite(11,1);
+      digitalWrite(pin_pump,1);
       digitalWrite(ps_out,0);
     }
     //myGLCD.print("   ", 16*5, 20);
@@ -635,24 +647,29 @@ void loop() {
       myGLCD.print(str, 16*0, 135);
     break;
     case 6:
-      sprintf(str, "RPM-%04d  STATE-%d%d%d%d%d ",rpms[averaging], ready2start, started, accelerated,runned, start_error);
-      myGLCD.print(str , 1 , 157);   
+      sprintf(str, "TN4-%03d  TN5-%03d    ", temps[8], temps[9]);
+      myGLCD.print(str, 16*0, 157);
     break;
     case 7:
-      sprintf(str, "MH current - %05d:%02d:%02d", mhhc, mhmc, mhsc);
-      myGLCD.print(str, 16*1, 179);
+      sprintf(str, "RPM-%04d  STATE-%d%d%d%d%d ",rpms[averaging], ready2start, started, accelerated,runned, start_error);
+      myGLCD.print(str , 1 , 179);   
     break;
     case 8:
-      sprintf(str, "MH in total - %05d:%02d:%02d", mhht, mhmt, mhst);
+      sprintf(str, "MH current - %05d:%02d:%02d", mhhc, mhmc, mhsc);
       myGLCD.print(str, 16*1, 201);
+    break;
+    case 9:
+      sprintf(str, "MH in total - %05d:%02d:%02d", mhht, mhmt, mhst);
+      myGLCD.print(str, 16*1, 223);
     break;
     }
     i_line++;
-    if (i_line>8){
+    if (i_line>9){
       i_line=0;
     }
     //char t4_text[30];
     //sprintf(t4_text, "t4- %03d", temps[3]);
     //myGLCD.print(t4_text, 16*1, 223);
+    Serial.println(boost1_val);
 
 }
