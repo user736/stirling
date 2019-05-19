@@ -25,20 +25,20 @@
 #define i_temp_head2 1
 #define i_temp_cool_in 2
 #define i_temp_cool_out 3
-#define temps_count 10
+#define temps_count 12
 
 #define OCR2A_v 110
 #define pin_B 16
-#define temp2start 400
+#define temp2start 450
 #define pin_pwm 17
 #define pin_pump 11
 #define averaging 16
 #define tiks_per_m 29296
 #define rele_pwm_val 1536
 #define pwm_rele 5
-#define pwm_fan 3
+#define pwm_fan 2
 #define pwm_load 1
-#define pwm_pump 2
+#define pwm_pump 3
 #define pwm_boost1 4
 #define t_rpm 350
 #define ps_in 15
@@ -48,13 +48,14 @@
 //LiquidCrystal lcd(LCD_RS, LCD_E, LCD_D4, LCD_D5, LCD_D6, LCD_D7);
 MAX6675 thermocouple(thermoCLK, thermoCS, thermoDO);
 
-
+ 
 int temps[temps_count];
 int i_temp = 0;
 int shift_data;
 int n_rpm=500;
 int n_rpm_delta=500;
-
+int rpm_error_count=0;
+int rpm_error_val=0;
 
 int RPM=0;
 int rpms[averaging+1]={0};
@@ -280,8 +281,14 @@ ISR (TIMER2_COMPA_vect) {
 }
 
 ISR (INT3_vect){
-  rpms[rpms_pos]=tiks_per_m/tiks_int;
-  rpms_pos++;
+  int rpm_val=tiks_per_m/tiks_int;
+  if (rpm_val>1500){
+      rpm_error_val=rpm_val;
+      rpm_error_count++;
+  }else{
+      rpms[rpms_pos]=rpm_val;
+      rpms_pos++;
+  }
   if(rpms_pos>=averaging){
     rpms_pos=0;
   }
@@ -416,7 +423,7 @@ void loop() {
         }
       }
     }
-    boost1_val_delta=analogRead(A15)*2;
+    boost1_val_delta=analogRead(A15)*3;
     pwm.setPWM(pwm_boost1,0,boost1_val);
     n_rpm=500+analogRead(A14)/5;
    if ((boost1_val!=boost1_val_delta)||(n_rpm_delta!=n_rpm)) {
@@ -476,7 +483,7 @@ void loop() {
 
     if (runned and fan_en){  
         if(acc_charge){    
-          if ((float)U_val[1]*ref_U/U_coef[1]<28.5){
+          if ((float)U_val[1]*ref_U/U_coef[1]<29.2){
             digitalWrite(10,0);
           }else{
             digitalWrite(10,1);
@@ -635,7 +642,7 @@ Serial.println(pump_cicle);
       myGLCD.printNumF(energy_ws/3600, 2, 16*24, 69);
     break;
     case 3:
-      sprintf(str, "TH1-%03d  TH2-%03d   ", temps[i_temp_head1], temps[i_temp_head2]);
+      sprintf(str, "TH1-%03d  TH2-%03d  T12-%03d ", temps[i_temp_head1], temps[i_temp_head2], temps[11]);
       myGLCD.print(str, 16*0, 91);
     break;
     case 4:
@@ -647,7 +654,7 @@ Serial.println(pump_cicle);
       myGLCD.print(str, 16*0, 135);
     break;
     case 6:
-      sprintf(str, "TN4-%03d  TN5-%03d    ", temps[8], temps[9]);
+      sprintf(str, "TN4-%03d  TN5-%03d  TN6-%03d    ", temps[8], temps[9], temps[10]);
       myGLCD.print(str, 16*0, 157);
     break;
     case 7:
@@ -662,14 +669,21 @@ Serial.println(pump_cicle);
       sprintf(str, "MH in total - %05d:%02d:%02d", mhht, mhmt, mhst);
       myGLCD.print(str, 16*1, 223);
     break;
+    case 10:
+      sprintf(str, "Errors-%03d Last Err-%04d", rpm_error_count, rpm_error_val);
+      myGLCD.print(str, 16*1, 245);
+    break;
     }
     i_line++;
-    if (i_line>9){
+    if (i_line>10){
       i_line=0;
     }
     //char t4_text[30];
     //sprintf(t4_text, "t4- %03d", temps[3]);
     //myGLCD.print(t4_text, 16*1, 223);
-    Serial.println(boost1_val);
-
+    for (int i=0; i<averaging+1; i++){
+    Serial.print(rpms[i]);
+    Serial.print(',');
+    }
+    Serial.println();
 }
