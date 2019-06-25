@@ -29,7 +29,7 @@
 
 #define OCR2A_v 110
 #define pin_B 16
-#define temp2start 450
+#define temp2start -1 //450
 #define pin_pwm 17
 #define pin_pump 11
 #define averaging 16
@@ -400,7 +400,7 @@ void loop() {
     for (int i=2; i<6; i++){
       U_val[i]=analogRead(i+1);
     }
-    power=(float)(amperages[averaging]-507)*100/512*U_val[0]*ref_U/U_coef[0];
+    power=(float)(amperages[averaging]-507)*125/512*U_val[0]*ref_U/U_coef[0];
     digitalWrite(9, shnek_v);
     if (mhds>0){
       mhsc+=mhds;
@@ -423,7 +423,7 @@ void loop() {
         }
       }
     }
-    boost1_val_delta=analogRead(A15)*3;
+    boost1_val_delta=analogRead(A15)*4;
     pwm.setPWM(pwm_boost1,0,boost1_val);
     n_rpm=500+analogRead(A14)/5;
    if ((boost1_val!=boost1_val_delta)||(n_rpm_delta!=n_rpm)) {
@@ -637,7 +637,7 @@ Serial.println(pump_cicle);
       myGLCD.printNumF(U_val[5]*ref_U/U_coef[5], 2, 16*24, 47);
     break;
     case 2:
-      myGLCD.printNumF((float)(amperages[averaging]-507)*100/512, 2, 16*3, 69);
+      myGLCD.printNumF((float)(amperages[averaging]-507)*125/512, 1, 16*3, 69);
       myGLCD.printNumF(power, 2, 16*13, 69);
       myGLCD.printNumF(energy_ws/3600, 2, 16*24, 69);
     break;
